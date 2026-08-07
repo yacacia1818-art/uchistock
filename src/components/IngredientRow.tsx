@@ -1,6 +1,6 @@
 import { ShoppingCart, Trash2 } from 'lucide-react';
 import type { Ingredient } from '../types';
-import { clearExpiryIfEmpty, deleteIngredient, updateIngredient } from '../repositories/ingredientRepo';
+import { decrementIngredientQuantity, deleteIngredient, updateIngredient } from '../repositories/ingredientRepo';
 import { notifyDataChanged } from '../utils/bus';
 import { useToast } from './ToastProvider';
 import { toUserMessage } from '../utils/errors';
@@ -19,9 +19,14 @@ export function IngredientRow({ ingredient, onAddToMemo }: IngredientRowProps) {
   const earliestExpiry = getEarliestExpiry(ingredient);
 
   async function stepQuantity(delta: number) {
-    const next = Math.max(0, Math.round((ingredient.quantity + delta) * 10) / 10);
     try {
-      await updateIngredient(clearExpiryIfEmpty({ ...ingredient, quantity: next }));
+      if (delta < 0) {
+        // 期限バッチもFIFOで一緒に減らす（古い期限が消費済みなのに残り続けるのを防ぐため）
+        await decrementIngredientQuantity(ingredient.id, Math.abs(delta));
+      } else {
+        const next = Math.round((ingredient.quantity + delta) * 10) / 10;
+        await updateIngredient({ ...ingredient, quantity: next });
+      }
       notifyDataChanged();
     } catch (e) {
       showToast(toUserMessage(e, '更新に失敗しました'));

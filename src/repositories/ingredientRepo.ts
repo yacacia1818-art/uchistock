@@ -4,6 +4,7 @@ import { generateId } from '../utils/id';
 import { nowIsoStr } from '../utils/date';
 import { AppError } from '../utils/errors';
 import { snapQuantity } from '../utils/quantity';
+import { consumeExpiryBatches } from '../utils/expiry';
 
 function normalize(ingredient: Ingredient): Ingredient {
   if (typeof ingredient.quantity === 'number' && ingredient.unit) return ingredient;
@@ -146,9 +147,12 @@ export async function decrementIngredientQuantity(id: string, amount: number): P
     if (!ing) return undefined;
     const current = normalize(ing);
     const nextQuantity = snapQuantity(current.quantity - amount);
+    const { expiryDate, expiryBatches } = consumeExpiryBatches(current, amount);
     const updated: Ingredient = clearExpiryIfEmpty({
       ...current,
       quantity: nextQuantity,
+      expiryDate,
+      expiryBatches,
       updatedAt: nowIsoStr(),
     });
     await db.put('ingredients', updated);

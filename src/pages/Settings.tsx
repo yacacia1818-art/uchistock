@@ -2,24 +2,30 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Settings as SettingsIcon } from 'lucide-react';
 import { Header } from '../components/Header';
-import { getSettings, updateMonthlyBudget } from '../repositories/settingsRepo';
+import { getSettings, updateMonthlyBudget, updateBudgetStartDay } from '../repositories/settingsRepo';
 import { useToast } from '../components/ToastProvider';
 import { notifyDataChanged } from '../utils/bus';
 import { toUserMessage } from '../utils/errors';
+
+const START_DAY_OPTIONS = Array.from({ length: 28 }, (_, i) => i + 1);
 
 export function Settings() {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const [budget, setBudget] = useState('15000');
+  const [startDay, setStartDay] = useState(1);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     getSettings()
-      .then((s) => setBudget(String(s.monthlyBudget)))
+      .then((s) => {
+        setBudget(String(s.monthlyBudget));
+        setStartDay(s.budgetStartDay ?? 1);
+      })
       .catch((e) => showToast(toUserMessage(e, '設定の読み込みに失敗しました')));
   }, [showToast]);
 
-  async function handleSave() {
+  async function handleSaveBudget() {
     const value = Number(budget);
     if (budget.trim() === '' || Number.isNaN(value) || value < 0) {
       showToast('正しい金額を入力してください');
@@ -37,6 +43,17 @@ export function Settings() {
     }
   }
 
+  async function handleChangeStartDay(day: number) {
+    setStartDay(day);
+    try {
+      await updateBudgetStartDay(day);
+      notifyDataChanged();
+      showToast('保存しました');
+    } catch (e) {
+      showToast(toUserMessage(e, '保存に失敗しました'));
+    }
+  }
+
   return (
     <>
       <Header
@@ -50,7 +67,7 @@ export function Settings() {
       <div className="page-content">
         <div className="card mb-16">
           <div className="section-title">
-            <SettingsIcon size={16} /> 月の食費予算
+            <SettingsIcon size={16} /> 食費の予算
           </div>
           <div className="field">
             <label>予算金額</label>
@@ -62,10 +79,32 @@ export function Settings() {
               onChange={(e) => setBudget(e.target.value)}
             />
           </div>
-          <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+          <button className="btn btn-primary" onClick={handleSaveBudget} disabled={saving}>
             保存
           </button>
         </div>
+
+        <div className="card mb-16">
+          <div className="section-title">食費の集計開始日</div>
+          <p className="text-muted mb-16" style={{ fontSize: 13 }}>
+            毎月この日から翌月の前日までを1期間として集計します。
+          </p>
+          <div className="field">
+            <label>開始日</label>
+            <select
+              className="select"
+              value={startDay}
+              onChange={(e) => handleChangeStartDay(Number(e.target.value))}
+            >
+              {START_DAY_OPTIONS.map((d) => (
+                <option key={d} value={d}>
+                  {d}日
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
         <div className="card">
           <div className="section-title">食事区分</div>
           <p className="text-muted" style={{ fontSize: 13 }}>朝食・昼食・夕食・間食の4区分で固定されています。</p>

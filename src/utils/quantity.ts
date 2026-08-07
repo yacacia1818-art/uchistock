@@ -1,4 +1,4 @@
-import type { UsageAmount } from '../types';
+import type { ShoppingMemoItem, UsageAmount } from '../types';
 
 // パック・袋・玉など「まとめ買いして少しずつ使う」単位（割合選択UIを使う）
 const FRACTION_UNITS = new Set(['パック', '袋', '玉']);
@@ -77,6 +77,12 @@ export function formatQuantity(quantity: number, unit: string): string {
 export function applyUsage(quantity: number, usage: UsageAmount): number {
   const next = quantity - usage.value;
   return Math.max(0, Math.round(next * 10000) / 10000);
+}
+
+// 買い物メモの数量表示（新: 構造化フィールド優先、旧: 自由入力文字列にフォールバック）
+export function formatMemoQuantity(item: ShoppingMemoItem): string | undefined {
+  if (item.quantityValue && item.unit) return `${item.quantityValue}${item.unit}`;
+  return item.quantity;
 }
 
 export function formatUsage(usage: UsageAmount, unit: string): string {

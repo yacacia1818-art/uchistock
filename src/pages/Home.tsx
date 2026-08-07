@@ -5,13 +5,15 @@ import { MealFormSheet } from '../components/MealFormSheet';
 import { PurchaseFormSheet } from '../components/PurchaseFormSheet';
 import { getSettings } from '../repositories/settingsRepo';
 import { getTodayMealsGroupedByType } from '../repositories/mealRepo';
-import { getMonthlyCost } from '../services/foodCost';
-import { currentYearMonth, remainingDaysInMonth } from '../utils/date';
+import { listIngredients } from '../repositories/ingredientRepo';
+import { getPeriodCost } from '../services/foodCost';
+import { getCurrentPeriod, formatPeriodRangeLabel, remainingDaysInPeriod } from '../utils/period';
+import { getEarliestExpiry, daysUntil, formatExpiryRelative } from '../utils/expiry';
 import { useDataVersion } from '../hooks/useDataVersion';
 import { useToast } from '../components/ToastProvider';
 import { toUserMessage } from '../utils/errors';
 import { mealContentLabel } from '../utils/mealDisplay';
-import type { Meal, MealType } from '../types';
+import type { Ingredient, Meal, MealType } from '../types';
 
 const MEAL_ROWS: { type: MealType; icon: typeof Sun }[] = [
   { type: '朝食', icon: Sun },
@@ -20,12 +22,16 @@ const MEAL_ROWS: { type: MealType; icon: typeof Sun }[] = [
   { type: '間食', icon: Cookie },
 ];
 
+const EXPIRY_WARNING_DAYS = 3;
+
 export function Home() {
   const { showToast } = useToast();
   const version = useDataVersion();
   const [budget, setBudget] = useState(15000);
   const [used, setUsed] = useState(0);
+  const [startDay, setStartDay] = useState(1);
   const [todayMeals, setTodayMeals] = useState<Record<string, Meal[]>>({});
+  const [expiringIngredients, setExpiringIngredients] = useState<{ ingredient: Ingredient; days: number }[]>([]);
   const [showMealForm, setShowMealForm] = useState<MealType | null>(null);
   const [showPurchaseForm, setShowPurchaseForm] = useState(false);
 
@@ -33,15 +39,29 @@ export function Home() {
     let cancelled = false;
     async function load() {
       try {
-        const [settings, cost, meals] = await Promise.all([
-          getSettings(),
-          getMonthlyCost(currentYearMonth()),
+        const settings = await getSettings();
+        const period = getCurrentPeriod(settings.budgetStartDay);
+        const [cost, meals, ingredients] = await Promise.all([
+          getPeriodCost(period),
           getTodayMealsGroupedByType(),
+          listIngredients(),
         ]);
         if (cancelled) return;
         setBudget(settings.monthlyBudget);
+        setStartDay(settings.budgetStartDay ?? 1);
         setUsed(cost.used);
         setTodayMeals(meals);
+        const expiring = ingredients
+          .filter((i) => i.quantity > 0)
+          .map((i) => {
+            const earliest = getEarliestExpiry(i);
+            if (!earliest) return null;
+            const days = daysUntil(earliest);
+            return days <= EXPIRY_WARNING_DAYS ? { ingredient: i, days } : null;
+          })
+          .filter((x): x is { ingredient: Ingredient; days: number } => x !== null)
+          .sort((a, b) => a.days - b.days);
+        setExpiringIngredients(expiring);
       } catch (e) {
         showToast(toUserMessage(e, 'データの読み込みに失敗しました'));
       }
@@ -52,9 +72,11 @@ export function Home() {
     };
   }, [version, showToast]);
 
+  const period = getCurrentPeriod(startDay);
+  const periodLabel = startDay === 1 ? '今月の食費' : '今期の食費';
   const remaining = budget - used;
   const progress = budget > 0 ? Math.min(100, Math.round((used / budget) * 100)) : 0;
-  const perDay = Math.max(0, Math.floor(remaining / remainingDaysInMonth()));
+  const perDay = Math.max(0, Math.floor(remaining / remainingDaysInPeriod(period)));
 
   function mealSummary(meals: Meal[] | undefined): string {
     if (!meals || meals.length === 0) return '未記録';
@@ -76,11 +98,14 @@ export function Home() {
         <div className="card mb-16">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
             <span className="section-title" style={{ marginBottom: 0 }}>
-              今月の食費
+              {periodLabel}
             </span>
             <span className="text-muted" style={{ fontSize: 12 }}>
               予算 ¥{budget.toLocaleString()}
             </span>
+          </div>
+          <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
+            {formatPeriodRangeLabel(period)}
           </div>
           <div style={{ fontSize: 32, fontWeight: 800, marginTop: 6 }}>
             ¥{used.toLocaleString()}
@@ -112,6 +137,23 @@ export function Home() {
             <span style={{ fontWeight: 500, fontSize: 11, opacity: 0.9 }}>買ったものを記録</span>
           </button>
         </div>
+
+        {expiringIngredients.length > 0 && (
+          <div className="card mb-16">
+            <div className="section-title">⏰ 期限が近い食材</div>
+            {expiringIngredients.slice(0, 5).map(({ ingredient, days }) => (
+              <div className="link-row" key={ingredient.id}>
+                <span>{ingredient.name}</span>
+                <span
+                  className={days < 0 ? '' : 'text-muted'}
+                  style={days < 0 ? { color: 'var(--color-danger)', fontWeight: 700 } : undefined}
+                >
+                  {formatExpiryRelative(days)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div className="card">
           <div className="section-title">🍴 今日のごはん</div>

@@ -19,6 +19,12 @@ export async function listPurchasesByMonth(ym: string): Promise<Purchase[]> {
   return all.filter((p) => p.date.startsWith(ym));
 }
 
+// 開始日・終了日（両端含む）で絞り込む。食費集計期間の計算に使用する
+export async function listPurchasesByDateRange(start: string, end: string): Promise<Purchase[]> {
+  const all = await listPurchases();
+  return all.filter((p) => p.date >= start && p.date <= end);
+}
+
 export async function getPurchase(id: string): Promise<Purchase | undefined> {
   try {
     const db = await getDB();

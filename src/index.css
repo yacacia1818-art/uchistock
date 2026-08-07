@@ -29,6 +29,11 @@ body {
   padding: 0;
 }
 
+html {
+  /* 連続タップでのダブルタップズームを防ぎつつ、ピンチズームと縦スクロールは維持する */
+  touch-action: manipulation;
+}
+
 body {
   background: var(--color-bg);
   color: var(--color-text);
@@ -256,7 +261,8 @@ button {
   border-radius: var(--radius-sm);
   border: 1.5px solid var(--color-border);
   background: var(--color-surface);
-  font-size: 15px;
+  /* iOS Safariは入力欄のfont-sizeが16px未満だとフォーカス時に自動ズームするため16px以上を維持する */
+  font-size: 16px;
   color: var(--color-text);
 }
 .input:focus,
@@ -605,6 +611,9 @@ button {
   height: 5px;
   border-radius: 999px;
   background: var(--color-secondary);
+}
+.calendar-dot.expiry {
+  background: var(--color-danger);
 }
 
 .recipe-thumb {

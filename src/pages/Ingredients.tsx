@@ -15,6 +15,7 @@ import { useDataVersion } from '../hooks/useDataVersion';
 import { useToast } from '../components/ToastProvider';
 import { notifyDataChanged } from '../utils/bus';
 import { toUserMessage } from '../utils/errors';
+import { formatMemoQuantity } from '../utils/quantity';
 import type { Ingredient, IngredientCategory, ShoppingMemoItem } from '../types';
 
 const CATEGORIES: (IngredientCategory | 'すべて')[] = [
@@ -156,8 +157,11 @@ export function Ingredients() {
                     <label className="checkbox-row" key={item.id}>
                       <input type="checkbox" checked={false} onChange={() => handleToggleMemo(item)} />
                       <span style={{ flex: 1 }}>
+                        {item.category === '日用品' && <span className="text-muted">🧻 </span>}
                         {item.name}
-                        {item.quantity && <span className="text-muted"> ・{item.quantity}</span>}
+                        {formatMemoQuantity(item) && (
+                          <span className="text-muted"> ・{formatMemoQuantity(item)}</span>
+                        )}
                         {item.memo && <div className="row-sub">{item.memo}</div>}
                       </span>
                       <button
@@ -180,7 +184,7 @@ export function Ingredients() {
                           <input type="checkbox" checked={true} onChange={() => handleToggleMemo(item)} />
                           <span style={{ flex: 1, textDecoration: 'line-through', color: 'var(--color-text-muted)' }}>
                             {item.name}
-                            {item.quantity && <span> ・{item.quantity}</span>}
+                            {formatMemoQuantity(item) && <span> ・{formatMemoQuantity(item)}</span>}
                           </span>
                         </label>
                       ))}

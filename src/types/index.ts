@@ -6,8 +6,14 @@ export type IngredientCategory = '野菜' | '肉・魚' | '卵・乳製品' | '�
 export type TrackType = 'count' | 'rough';
 export type RoughLevel = '多い' | '半分' | '少ない' | 'なし';
 
-export const UNIT_OPTIONS = ['個', '本', 'パック', '袋', '玉', '枚', '食', 'その他'] as const;
+export const UNIT_OPTIONS = ['個', '本', 'パック', '袋', '箱', '玉', '枚', '食', 'その他'] as const;
 export type UnitOption = (typeof UNIT_OPTIONS)[number];
+
+// 期限バッチ：購入ごとの期限と数量を保持する（古い期限を失わないため）
+export interface ExpiryBatch {
+  date: string; // YYYY-MM-DD
+  quantity: number;
+}
 
 export interface Ingredient {
   id: string;
@@ -21,15 +27,25 @@ export interface Ingredient {
   trackType?: TrackType;
   count?: number;
   roughLevel?: RoughLevel;
+  // v1.1: 期限（任意）。表示用の代表値（最新の購入で上書き）
+  expiryDate?: string; // YYYY-MM-DD
+  // 期限ごとの数量履歴（カレンダー等で古い期限も参照するため非破壊で保持）
+  expiryBatches?: ExpiryBatch[];
 }
+
+export type ShoppingCategory = '食品' | '日用品';
 
 export interface ShoppingMemoItem {
   id: string;
   name: string;
-  quantity?: string;
+  quantity?: string; // v1.0レガシー：自由入力の数量文字列（既存データ保護のため保持）
   memo?: string;
   checked: boolean;
   createdAt: string;
+  // v1.1: 構造化された数量・単位・カテゴリ（任意）
+  category?: ShoppingCategory; // 未設定は「食品」として扱う
+  quantityValue?: number;
+  unit?: string;
 }
 
 export interface PurchaseItem {
@@ -41,6 +57,7 @@ export interface InventoryAddition {
   name: string;
   unit: string;
   quantity: number;
+  expiryDate?: string; // YYYY-MM-DD
 }
 
 export interface Purchase {
@@ -53,6 +70,8 @@ export interface Purchase {
   receiptId?: string;
   // この購入で在庫へ反映した内容（二重反映防止の記録も兼ねる）
   inventoryAdditions?: InventoryAddition[];
+  // v1.1: 食品・日用品を同時購入した場合の食費按分額（未設定なら合計金額全体を食費として扱う）
+  foodAmount?: number;
   createdAt: string;
 }
 
@@ -126,4 +145,6 @@ export interface Recipe {
 export interface Settings {
   id: 'settings';
   monthlyBudget: number;
+  // v1.1: 食費の集計開始日（1〜28）。未設定は1日として扱う
+  budgetStartDay?: number;
 }

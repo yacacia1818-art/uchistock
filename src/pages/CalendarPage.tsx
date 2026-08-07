@@ -4,7 +4,11 @@ import { Header } from '../components/Header';
 import { listMealsByMonth } from '../repositories/mealRepo';
 import { listPurchasesByMonth } from '../repositories/purchaseRepo';
 import { listCookedDishesByMonth } from '../repositories/cookedDishRepo';
+import { listIngredients } from '../repositories/ingredientRepo';
 import { getSettings } from '../repositories/settingsRepo';
+import { getPeriodCost, foodPortionOf } from '../services/foodCost';
+import { getCurrentPeriod, formatPeriodRangeLabel } from '../utils/period';
+import { getExpiryDates } from '../utils/expiry';
 import {
   addMonths,
   currentYearMonth,
@@ -18,7 +22,7 @@ import { useToast } from '../components/ToastProvider';
 import { toUserMessage } from '../utils/errors';
 import { mealContentLabel } from '../utils/mealDisplay';
 import { formatQuantity } from '../utils/quantity';
-import type { CookedDish, Meal, MealType, Purchase } from '../types';
+import type { CookedDish, Ingredient, Meal, MealType, Purchase } from '../types';
 
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 const MEAL_ORDER: MealType[] = ['朝食', '昼食', '夕食', '間食'];
@@ -30,28 +34,47 @@ export function CalendarPage() {
   const [meals, setMeals] = useState<Meal[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [cookedDishes, setCookedDishes] = useState<CookedDish[]>([]);
+  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [budget, setBudget] = useState(15000);
+  const [periodUsed, setPeriodUsed] = useState(0);
+  const [periodLabel, setPeriodLabel] = useState('');
   const [selectedDate, setSelectedDate] = useState<string>(todayDateStr());
 
   useEffect(() => {
-    Promise.all([listMealsByMonth(ym), listPurchasesByMonth(ym), listCookedDishesByMonth(ym), getSettings()])
-      .then(([m, p, c, s]) => {
+    Promise.all([
+      listMealsByMonth(ym),
+      listPurchasesByMonth(ym),
+      listCookedDishesByMonth(ym),
+      listIngredients(),
+      getSettings(),
+    ])
+      .then(async ([m, p, c, ing, s]) => {
         setMeals(m);
         setPurchases(p);
         setCookedDishes(c);
+        setIngredients(ing);
         setBudget(s.monthlyBudget);
+        const period = getCurrentPeriod(s.budgetStartDay);
+        setPeriodLabel(formatPeriodRangeLabel(period));
+        const cost = await getPeriodCost(period);
+        setPeriodUsed(cost.used);
       })
       .catch((e) => showToast(toUserMessage(e, 'データの読み込みに失敗しました')));
   }, [ym, version, showToast]);
 
-  const used = useMemo(() => {
-    const purchaseTotal = purchases.reduce((s, p) => s + p.totalAmount, 0);
-    const eatOutTotal = meals
-      .filter((m) => m.mealKind === 'eatout' && m.amount)
-      .reduce((s, m) => s + (m.amount ?? 0), 0);
-    return purchaseTotal + eatOutTotal;
-  }, [purchases, meals]);
-  const remaining = budget - used;
+  const remaining = budget - periodUsed;
+
+  const expiryByDate = useMemo(() => {
+    const map = new Map<string, Ingredient[]>();
+    for (const ing of ingredients) {
+      if (ing.quantity <= 0) continue;
+      for (const date of getExpiryDates(ing)) {
+        if (!map.has(date)) map.set(date, []);
+        map.get(date)!.push(ing);
+      }
+    }
+    return map;
+  }, [ingredients]);
 
   const recordedDates = useMemo(() => {
     const set = new Set<string>();
@@ -80,6 +103,7 @@ export function CalendarPage() {
     .sort((a, b) => MEAL_ORDER.indexOf(a.mealType) - MEAL_ORDER.indexOf(b.mealType));
   const dayPurchases = purchases.filter((p) => p.date === selectedDate);
   const dayCooking = cookedDishes.filter((c) => c.date === selectedDate);
+  const dayExpiring = expiryByDate.get(selectedDate) ?? [];
 
   return (
     <>
@@ -88,12 +112,17 @@ export function CalendarPage() {
         <div className="card mb-16">
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
             <span>
-              使用額 <strong>¥{used.toLocaleString()}</strong>
+              使用額 <strong>¥{periodUsed.toLocaleString()}</strong>
             </span>
             <span>
               残り予算 <strong>¥{remaining.toLocaleString()}</strong>
             </span>
           </div>
+          {periodLabel && (
+            <div className="text-muted mt-8" style={{ fontSize: 12 }}>
+              集計期間：{periodLabel}
+            </div>
+          )}
         </div>
 
         <div className="card mb-16">
@@ -117,6 +146,7 @@ export function CalendarPage() {
               const isToday = c.date === today;
               const isSelected = c.date === selectedDate;
               const hasRecord = recordedDates.has(c.date);
+              const hasExpiry = expiryByDate.has(c.date);
               return (
                 <button
                   key={c.date}
@@ -124,7 +154,10 @@ export function CalendarPage() {
                   onClick={() => setSelectedDate(c.date!)}
                 >
                   {Number(c.date.slice(-2))}
-                  {hasRecord ? <span className="calendar-dot" /> : <span style={{ height: 5 }} />}
+                  <span style={{ display: 'flex', gap: 3, height: 5 }}>
+                    {hasRecord && <span className="calendar-dot" />}
+                    {hasExpiry && <span className="calendar-dot expiry" />}
+                  </span>
                 </button>
               );
             })}
@@ -133,10 +166,25 @@ export function CalendarPage() {
 
         <div className="card">
           <div className="section-title">{formatDateLabel(selectedDate)}の記録</div>
-          {dayMeals.length === 0 && dayPurchases.length === 0 && dayCooking.length === 0 ? (
+          {dayMeals.length === 0 && dayPurchases.length === 0 && dayCooking.length === 0 && dayExpiring.length === 0 ? (
             <div className="empty-state">記録がありません</div>
           ) : (
             <>
+              {dayExpiring.length > 0 && (
+                <div style={{ marginBottom: 8 }}>
+                  <div className="text-muted" style={{ fontSize: 12, marginBottom: 4 }}>
+                    【期限】
+                  </div>
+                  {dayExpiring.map((ing) => (
+                    <div className="link-row" key={ing.id}>
+                      <span style={{ color: 'var(--color-danger)', fontWeight: 700 }}>期限</span>
+                      <span>
+                        {ing.name}（{formatQuantity(ing.quantity, ing.unit)}）
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
               {dayMeals.map((m) => (
                 <div className="link-row" key={m.id}>
                   <span style={{ color: 'var(--color-primary-dark)', fontWeight: 700 }}>{m.mealType}</span>
@@ -161,6 +209,7 @@ export function CalendarPage() {
                   <span style={{ color: 'var(--color-primary-dark)', fontWeight: 700 }}>買い物</span>
                   <span>
                     ¥{p.totalAmount.toLocaleString()}
+                    {p.foodAmount !== undefined && p.foodAmount !== p.totalAmount && `（食費 ¥${foodPortionOf(p).toLocaleString()}）`}
                     {p.storeName && `（${p.storeName}）`}
                   </span>
                 </div>

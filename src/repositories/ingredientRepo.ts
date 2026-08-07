@@ -73,20 +73,34 @@ export async function deleteIngredient(id: string): Promise<void> {
 }
 
 // 購入時の在庫反映：同名・同単位の食材があれば数量を加算、なければ新規作成する
+// expiryDateを指定した場合、代表期限は最新の値へ上書きしつつ、古い期限もexpiryBatchesへ保持する
 export async function addOrMergeIngredient(
   name: string,
   unit: string,
   quantity: number,
-  category: Ingredient['category'] = 'その他'
+  category: Ingredient['category'] = 'その他',
+  expiryDate?: string
 ): Promise<Ingredient> {
   try {
     const db = await getDB();
     const all = (await db.getAll('ingredients')).map(normalize);
     const existing = all.find((i) => i.name.trim() === name.trim() && i.unit === unit);
     if (existing) {
+      const nextQuantity = Math.round((existing.quantity + quantity) * 10000) / 10000;
+      let expiryBatches = existing.expiryBatches;
+      let nextExpiryDate = existing.expiryDate;
+      if (expiryDate) {
+        const previousBatches =
+          existing.expiryBatches ??
+          (existing.expiryDate ? [{ date: existing.expiryDate, quantity: existing.quantity }] : []);
+        expiryBatches = [...previousBatches, { date: expiryDate, quantity }];
+        nextExpiryDate = expiryDate;
+      }
       const updated: Ingredient = {
         ...existing,
-        quantity: Math.round((existing.quantity + quantity) * 10000) / 10000,
+        quantity: nextQuantity,
+        expiryDate: nextExpiryDate,
+        expiryBatches,
         updatedAt: nowIsoStr(),
       };
       await db.put('ingredients', updated);
@@ -99,6 +113,8 @@ export async function addOrMergeIngredient(
       category,
       unit,
       quantity,
+      expiryDate,
+      expiryBatches: expiryDate ? [{ date: expiryDate, quantity }] : undefined,
       createdAt: now,
       updatedAt: now,
     };
@@ -109,6 +125,12 @@ export async function addOrMergeIngredient(
   }
 }
 
+// 数量が0になった食材は期限情報も一緒にクリアする（カレンダー等の期限表示から除外するため）
+export function clearExpiryIfEmpty(ingredient: Ingredient): Ingredient {
+  if (ingredient.quantity > 0) return ingredient;
+  return { ...ingredient, expiryDate: undefined, expiryBatches: undefined };
+}
+
 // 調理・食事で使用した分だけ在庫を減らす（0未満にはしない）
 export async function decrementIngredientQuantity(id: string, amount: number): Promise<Ingredient | undefined> {
   try {
@@ -117,7 +139,11 @@ export async function decrementIngredientQuantity(id: string, amount: number): P
     if (!ing) return undefined;
     const current = normalize(ing);
     const nextQuantity = Math.max(0, Math.round((current.quantity - amount) * 10000) / 10000);
-    const updated: Ingredient = { ...current, quantity: nextQuantity, updatedAt: nowIsoStr() };
+    const updated: Ingredient = clearExpiryIfEmpty({
+      ...current,
+      quantity: nextQuantity,
+      updatedAt: nowIsoStr(),
+    });
     await db.put('ingredients', updated);
     return updated;
   } catch {

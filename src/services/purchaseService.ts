@@ -6,6 +6,7 @@ import { AppError } from '../utils/errors';
 
 interface RecordPurchaseInput {
   totalAmount: number;
+  foodAmount?: number;
   storeName?: string;
   items?: PurchaseItem[];
   receiptFile?: File | null;
@@ -19,6 +20,9 @@ export async function recordPurchase(input: RecordPurchaseInput): Promise<Purcha
   if (!Number.isFinite(input.totalAmount) || input.totalAmount < 0) {
     throw new AppError('金額には0以上の数値を入力してください');
   }
+  if (input.foodAmount !== undefined && (!Number.isFinite(input.foodAmount) || input.foodAmount < 0)) {
+    throw new AppError('食費分の金額には0以上の数値を入力してください');
+  }
 
   let receiptId: string | undefined;
   if (input.receiptFile) {
@@ -27,6 +31,7 @@ export async function recordPurchase(input: RecordPurchaseInput): Promise<Purcha
 
   const purchase = await addPurchase({
     totalAmount: input.totalAmount,
+    foodAmount: input.foodAmount,
     storeName: input.storeName,
     items: input.items,
     receiptId,
@@ -39,7 +44,7 @@ export async function recordPurchase(input: RecordPurchaseInput): Promise<Purcha
 
   if (input.inventoryAdditions) {
     for (const addition of input.inventoryAdditions) {
-      await addOrMergeIngredient(addition.name, addition.unit, addition.quantity);
+      await addOrMergeIngredient(addition.name, addition.unit, addition.quantity, 'その他', addition.expiryDate);
     }
   }
 

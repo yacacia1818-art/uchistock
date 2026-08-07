@@ -20,6 +20,7 @@ export function AddIngredientSheet({ onClose }: AddIngredientSheetProps) {
   const [unit, setUnit] = useState<string>('個');
   const [customUnit, setCustomUnit] = useState('');
   const [quantity, setQuantity] = useState(1);
+  const [expiryDate, setExpiryDate] = useState('');
   const [saving, setSaving] = useState(false);
 
   const resolvedUnit = unit === 'その他' ? customUnit.trim() || 'その他' : unit;
@@ -36,6 +37,8 @@ export function AddIngredientSheet({ onClose }: AddIngredientSheetProps) {
         category,
         unit: resolvedUnit,
         quantity,
+        expiryDate: expiryDate || undefined,
+        expiryBatches: expiryDate ? [{ date: expiryDate, quantity }] : undefined,
       });
       notifyDataChanged();
       showToast('食材を追加しました');
@@ -98,6 +101,16 @@ export function AddIngredientSheet({ onClose }: AddIngredientSheetProps) {
           </span>
           <button onClick={() => setQuantity((q) => q + 1)}>＋</button>
         </div>
+      </div>
+
+      <div className="field">
+        <label>期限（任意）</label>
+        <input
+          className="input"
+          type="date"
+          value={expiryDate}
+          onChange={(e) => setExpiryDate(e.target.value)}
+        />
       </div>
 
       <button className="btn btn-primary" onClick={handleSave} disabled={saving}>

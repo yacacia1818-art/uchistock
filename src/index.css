@@ -27,14 +27,21 @@ html,
 body {
   margin: 0;
   padding: 0;
+  /* iOS Safariの弾性スクロール（ラバーバンド効果）で画面が左右にわずかにぶれるのを防ぐ。
+     横方向に実際にはみ出す要素がなくても、overscroll-behaviorを指定しないとこの横ぶれが起こりうる */
+  overscroll-behavior-x: none;
+  /* 上記対策後の最終的な安全策。個々の要素の横幅超過を隠すためのものではない */
+  overflow-x: hidden;
 }
 
 html {
   /* 連続タップでのダブルタップズームを防ぎつつ、ピンチズームと縦スクロールは維持する */
   touch-action: manipulation;
+  width: 100%;
 }
 
 body {
+  width: 100%;
   background: var(--color-bg);
   color: var(--color-text);
   font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Yu Gothic', 'Segoe UI', Roboto,

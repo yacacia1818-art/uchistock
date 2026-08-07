@@ -6,9 +6,18 @@ import { AppError } from '../utils/errors';
 import { snapQuantity } from '../utils/quantity';
 import { consumeExpiryBatches } from '../utils/expiry';
 
+// 単位の前後の空白を除去して比較・保存する（古いデータや購入時の入力に紛れ込んだ空白で
+// 同じ食材なのに別の食材として扱われ、期限などが分かれてしまうのを防ぐ）
+function normalizeUnit(unit: string | undefined): string {
+  return (unit ?? '').trim() || '個';
+}
+
 function normalize(ingredient: Ingredient): Ingredient {
-  if (typeof ingredient.quantity === 'number' && ingredient.unit) return ingredient;
-  return { ...ingredient, quantity: ingredient.quantity ?? ingredient.count ?? 0, unit: ingredient.unit ?? '個' };
+  if (typeof ingredient.quantity === 'number' && ingredient.unit) {
+    const trimmed = normalizeUnit(ingredient.unit);
+    return trimmed === ingredient.unit ? ingredient : { ...ingredient, unit: trimmed };
+  }
+  return { ...ingredient, quantity: ingredient.quantity ?? ingredient.count ?? 0, unit: normalizeUnit(ingredient.unit) };
 }
 
 export async function listIngredients(): Promise<Ingredient[]> {
@@ -68,7 +77,8 @@ export async function updateIngredient(ingredient: Ingredient): Promise<Ingredie
 // 同名・同単位の食材を検索する（購入編集時の差分反映の安全確認に使用）
 export async function findIngredientByNameUnit(name: string, unit: string): Promise<Ingredient | undefined> {
   const all = await listIngredients();
-  return all.find((i) => i.name.trim() === name.trim() && i.unit === unit);
+  const targetUnit = normalizeUnit(unit);
+  return all.find((i) => i.name.trim() === name.trim() && i.unit === targetUnit);
 }
 
 export async function deleteIngredient(id: string): Promise<void> {
@@ -91,8 +101,9 @@ export async function addOrMergeIngredient(
 ): Promise<Ingredient> {
   try {
     const db = await getDB();
+    const targetUnit = normalizeUnit(unit);
     const all = (await db.getAll('ingredients')).map(normalize);
-    const existing = all.find((i) => i.name.trim() === name.trim() && i.unit === unit);
+    const existing = all.find((i) => i.name.trim() === name.trim() && i.unit === targetUnit);
     if (existing) {
       const nextQuantity = snapQuantity(existing.quantity + quantity);
       let expiryBatches = existing.expiryBatches;
@@ -119,7 +130,7 @@ export async function addOrMergeIngredient(
       id: generateId(),
       name: name.trim(),
       category,
-      unit,
+      unit: targetUnit,
       quantity,
       expiryDate,
       expiryBatches: expiryDate ? [{ date: expiryDate, quantity }] : undefined,

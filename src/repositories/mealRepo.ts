@@ -24,12 +24,14 @@ export async function listMealsByDate(date: string): Promise<Meal[]> {
   return all.filter((m) => m.date === date);
 }
 
-export async function getTodayMealsByType(): Promise<Record<string, Meal | undefined>> {
+// 同じ日・同じ食事区分に複数回記録した場合もすべてまとめて返す
+export async function getTodayMealsGroupedByType(): Promise<Record<string, Meal[]>> {
   const today = todayDateStr();
   const meals = await listMealsByDate(today);
-  const result: Record<string, Meal | undefined> = {};
+  const result: Record<string, Meal[]> = {};
   for (const meal of meals) {
-    result[meal.mealType] = meal;
+    if (!result[meal.mealType]) result[meal.mealType] = [];
+    result[meal.mealType].push(meal);
   }
   return result;
 }

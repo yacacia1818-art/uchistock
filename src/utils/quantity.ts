@@ -9,6 +9,18 @@ export function getUsageMode(unit: string): UsageMode {
   return FRACTION_UNITS.has(unit) ? 'fraction' : 'count';
 }
 
+// 買い物メモの自由入力「10個」「2本」等から数量・単位を推測する（強制しない：解釈できなければ既定値）
+export function parseMemoQuantity(raw: string | undefined): { quantity: number; unit: string } {
+  const text = (raw ?? '').trim();
+  const match = text.match(/^(\d+(?:\.\d+)?)\s*(.*)$/);
+  if (match) {
+    const quantity = Number(match[1]);
+    const unit = match[2].trim();
+    return { quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1, unit: unit || '個' };
+  }
+  return { quantity: 1, unit: '個' };
+}
+
 export const FRACTION_CHOICES: { label: string; value: number | 'all' | 'custom' }[] = [
   { label: '1/4', value: 1 / 4 },
   { label: '1/3', value: 1 / 3 },

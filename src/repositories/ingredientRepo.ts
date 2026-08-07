@@ -72,6 +72,43 @@ export async function deleteIngredient(id: string): Promise<void> {
   }
 }
 
+// 購入時の在庫反映：同名・同単位の食材があれば数量を加算、なければ新規作成する
+export async function addOrMergeIngredient(
+  name: string,
+  unit: string,
+  quantity: number,
+  category: Ingredient['category'] = 'その他'
+): Promise<Ingredient> {
+  try {
+    const db = await getDB();
+    const all = (await db.getAll('ingredients')).map(normalize);
+    const existing = all.find((i) => i.name.trim() === name.trim() && i.unit === unit);
+    if (existing) {
+      const updated: Ingredient = {
+        ...existing,
+        quantity: Math.round((existing.quantity + quantity) * 10000) / 10000,
+        updatedAt: nowIsoStr(),
+      };
+      await db.put('ingredients', updated);
+      return updated;
+    }
+    const now = nowIsoStr();
+    const created: Ingredient = {
+      id: generateId(),
+      name: name.trim(),
+      category,
+      unit,
+      quantity,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await db.put('ingredients', created);
+    return created;
+  } catch {
+    throw new AppError('食材在庫への反映に失敗しました');
+  }
+}
+
 // 調理・食事で使用した分だけ在庫を減らす（0未満にはしない）
 export async function decrementIngredientQuantity(id: string, amount: number): Promise<Ingredient | undefined> {
   try {

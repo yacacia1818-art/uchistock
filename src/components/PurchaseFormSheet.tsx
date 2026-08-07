@@ -1,16 +1,25 @@
 import { useRef, useState } from 'react';
 import { Camera } from 'lucide-react';
 import { BottomSheet } from './BottomSheet';
-import { addPurchase, saveReceiptImage } from '../repositories/purchaseRepo';
-import { deleteShoppingMemoItems } from '../repositories/shoppingMemoRepo';
+import { recordPurchase } from '../services/purchaseService';
 import { useToast } from './ToastProvider';
 import { notifyDataChanged } from '../utils/bus';
 import { toUserMessage } from '../utils/errors';
+import { parseMemoQuantity } from '../utils/quantity';
+import { UNIT_OPTIONS } from '../types';
 import type { ShoppingMemoItem } from '../types';
 
 interface PurchaseFormSheetProps {
   onClose: () => void;
   carriedItems?: ShoppingMemoItem[];
+}
+
+interface InventoryRow {
+  id: string;
+  name: string;
+  checked: boolean;
+  quantity: number;
+  unit: string;
 }
 
 export function PurchaseFormSheet({ onClose, carriedItems }: PurchaseFormSheetProps) {
@@ -23,6 +32,12 @@ export function PurchaseFormSheet({ onClose, carriedItems }: PurchaseFormSheetPr
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [inventoryRows, setInventoryRows] = useState<InventoryRow[]>(
+    (carriedItems ?? []).map((item) => {
+      const { quantity, unit } = parseMemoQuantity(item.quantity);
+      return { id: item.id, name: item.name, checked: true, quantity, unit };
+    })
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -30,6 +45,10 @@ export function PurchaseFormSheet({ onClose, carriedItems }: PurchaseFormSheetPr
     if (!file) return;
     setReceiptFile(file);
     setReceiptPreview(URL.createObjectURL(file));
+  }
+
+  function updateRow(id: string, patch: Partial<InventoryRow>) {
+    setInventoryRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   }
 
   async function handleSave() {
@@ -40,30 +59,24 @@ export function PurchaseFormSheet({ onClose, carriedItems }: PurchaseFormSheetPr
     }
     setSaving(true);
     try {
-      let receiptId: string | undefined;
-      if (receiptFile) {
-        try {
-          receiptId = await saveReceiptImage(receiptFile);
-        } catch (e) {
-          showToast(toUserMessage(e, 'レシート画像の保存に失敗しました'));
-        }
-      }
       const items = itemsText
         .split('\n')
         .map((s) => s.trim())
         .filter(Boolean)
         .map((name) => ({ name }));
 
-      await addPurchase({
+      const inventoryAdditions = inventoryRows
+        .filter((r) => r.checked && r.quantity > 0)
+        .map((r) => ({ name: r.name, unit: r.unit, quantity: r.quantity }));
+
+      await recordPurchase({
         totalAmount: amountNum,
         storeName: storeName.trim() || undefined,
         items: items.length > 0 ? items : undefined,
-        receiptId,
+        receiptFile,
+        carriedMemoIds: carriedItems?.map((i) => i.id),
+        inventoryAdditions,
       });
-
-      if (carriedItems && carriedItems.length > 0) {
-        await deleteShoppingMemoItems(carriedItems.map((i) => i.id));
-      }
 
       notifyDataChanged();
       showToast('記録しました');
@@ -104,6 +117,51 @@ export function PurchaseFormSheet({ onClose, carriedItems }: PurchaseFormSheetPr
           placeholder={'例：\n卵\n牛乳'}
         />
       </div>
+
+      {inventoryRows.length > 0 && (
+        <div className="field">
+          <label>在庫に追加</label>
+          <div className="card" style={{ padding: '4px 12px' }}>
+            {inventoryRows.map((row) => (
+              <div key={row.id} className="checkbox-row" style={{ flexWrap: 'wrap', gap: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={row.checked}
+                  onChange={(e) => updateRow(row.id, { checked: e.target.checked })}
+                />
+                <span style={{ flex: 1, minWidth: 80 }}>{row.name}</span>
+                {row.checked && (
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <input
+                      className="input"
+                      type="number"
+                      inputMode="decimal"
+                      style={{ width: 64, padding: '8px 10px' }}
+                      value={row.quantity}
+                      onChange={(e) => updateRow(row.id, { quantity: Math.max(0, Number(e.target.value)) })}
+                    />
+                    <select
+                      className="select"
+                      style={{ width: 84, padding: '8px 6px' }}
+                      value={row.unit}
+                      onChange={(e) => updateRow(row.id, { unit: e.target.value })}
+                    >
+                      {UNIT_OPTIONS.map((u) => (
+                        <option key={u} value={u}>
+                          {u}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          <p className="text-muted mt-8" style={{ fontSize: 12 }}>
+            ※ チェックを外すと在庫には追加されません。同じ食材・単位がある場合は数量を加算します。
+          </p>
+        </div>
+      )}
 
       <div className="field">
         <label>レシート画像（任意）</label>

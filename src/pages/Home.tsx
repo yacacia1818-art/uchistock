@@ -4,7 +4,7 @@ import { Header } from '../components/Header';
 import { MealFormSheet } from '../components/MealFormSheet';
 import { PurchaseFormSheet } from '../components/PurchaseFormSheet';
 import { getSettings } from '../repositories/settingsRepo';
-import { getTodayMealsByType } from '../repositories/mealRepo';
+import { getTodayMealsGroupedByType } from '../repositories/mealRepo';
 import { getMonthlyCost } from '../services/foodCost';
 import { currentYearMonth, remainingDaysInMonth } from '../utils/date';
 import { useDataVersion } from '../hooks/useDataVersion';
@@ -25,7 +25,7 @@ export function Home() {
   const version = useDataVersion();
   const [budget, setBudget] = useState(15000);
   const [used, setUsed] = useState(0);
-  const [todayMeals, setTodayMeals] = useState<Record<string, Meal | undefined>>({});
+  const [todayMeals, setTodayMeals] = useState<Record<string, Meal[]>>({});
   const [showMealForm, setShowMealForm] = useState<MealType | null>(null);
   const [showPurchaseForm, setShowPurchaseForm] = useState(false);
 
@@ -36,7 +36,7 @@ export function Home() {
         const [settings, cost, meals] = await Promise.all([
           getSettings(),
           getMonthlyCost(currentYearMonth()),
-          getTodayMealsByType(),
+          getTodayMealsGroupedByType(),
         ]);
         if (cancelled) return;
         setBudget(settings.monthlyBudget);
@@ -56,9 +56,9 @@ export function Home() {
   const progress = budget > 0 ? Math.min(100, Math.round((used / budget) * 100)) : 0;
   const perDay = Math.max(0, Math.floor(remaining / remainingDaysInMonth()));
 
-  function mealSummary(meal: Meal | undefined): string {
-    if (!meal) return '未記録';
-    return mealContentLabel(meal);
+  function mealSummary(meals: Meal[] | undefined): string {
+    if (!meals || meals.length === 0) return '未記録';
+    return meals.map(mealContentLabel).join('・');
   }
 
   return (
@@ -127,7 +127,7 @@ export function Home() {
                 {type}
               </span>
               <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span className={todayMeals[type] ? '' : 'text-muted'}>{mealSummary(todayMeals[type])}</span>
+                <span className={todayMeals[type]?.length ? '' : 'text-muted'}>{mealSummary(todayMeals[type])}</span>
                 <ChevronRight size={16} className="text-muted" />
               </span>
             </button>

@@ -37,6 +37,12 @@ export interface PurchaseItem {
   price?: number;
 }
 
+export interface InventoryAddition {
+  name: string;
+  unit: string;
+  quantity: number;
+}
+
 export interface Purchase {
   id: string;
   date: string; // YYYY-MM-DD
@@ -45,6 +51,8 @@ export interface Purchase {
   storeName?: string;
   items?: PurchaseItem[];
   receiptId?: string;
+  // この購入で在庫へ反映した内容（二重反映防止の記録も兼ねる）
+  inventoryAdditions?: InventoryAddition[];
   createdAt: string;
 }
 

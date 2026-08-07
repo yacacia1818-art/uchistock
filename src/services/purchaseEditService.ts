@@ -1,5 +1,10 @@
 import { updatePurchase, saveReceiptImage } from '../repositories/purchaseRepo';
-import { addOrMergeIngredient, decrementIngredientQuantity, findIngredientByNameUnit } from '../repositories/ingredientRepo';
+import {
+  addOrMergeIngredient,
+  decrementIngredientQuantity,
+  findIngredientByNameUnit,
+  updateIngredient,
+} from '../repositories/ingredientRepo';
 import { generateId } from '../utils/id';
 import { AppError } from '../utils/errors';
 import type { InventoryAddition, Purchase, PurchaseItem, ShoppingCategory } from '../types';
@@ -31,6 +36,40 @@ interface UpdatePurchaseWithInventoryInput {
 export interface UpdatePurchaseResult {
   purchase: Purchase;
   skippedReductions: string[];
+  // 数量は変わらず期限だけ変更されたが、対応するバッチを安全に特定できず在庫側の期限を更新できなかった商品名
+  skippedExpiryUpdates: string[];
+}
+
+// 数量が変わらず期限だけ変更された場合、対応するバッチを安全に特定できるときに限りその期限だけを置き換える。
+// 一部消費済みなどでどのバッチが対応するか確定できない場合は、無理に書き換えずスキップする。
+async function trySyncExpiryDateOnly(
+  name: string,
+  unit: string,
+  priorExpiryDate: string | undefined,
+  priorQuantity: number,
+  nextExpiryDate: string | undefined
+): Promise<boolean> {
+  if (priorExpiryDate === nextExpiryDate) return true;
+  const current = await findIngredientByNameUnit(name, unit);
+  if (!current) return true;
+  const batches = current.expiryBatches ?? (current.expiryDate ? [{ date: current.expiryDate, quantity: current.quantity }] : []);
+  const matchIdx = batches.findIndex(
+    (b) => b.date === priorExpiryDate && Math.abs(b.quantity - priorQuantity) < 1e-6
+  );
+  if (matchIdx < 0) return false;
+  const nextBatches = [...batches];
+  if (nextExpiryDate) {
+    nextBatches[matchIdx] = { date: nextExpiryDate, quantity: batches[matchIdx].quantity };
+  } else {
+    nextBatches.splice(matchIdx, 1);
+  }
+  const sorted = [...nextBatches].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  await updateIngredient({
+    ...current,
+    expiryDate: sorted[0]?.date,
+    expiryBatches: sorted.length > 0 ? sorted : undefined,
+  });
+  return true;
 }
 
 // 既存の購入記録を安全に更新する：新規追加分のみ加算し、既に反映済みの分は差分のみ反映する。
@@ -51,6 +90,7 @@ export async function updatePurchaseWithInventory(
   }
 
   const skippedReductions: string[] = [];
+  const skippedExpiryUpdates: string[] = [];
   const newInventoryAdditions: InventoryAddition[] = [];
   const items: PurchaseItem[] = [];
 
@@ -109,8 +149,15 @@ export async function updatePurchaseWithInventory(
         skippedReductions.push(name);
         newInventoryAdditions.push(prior);
       }
+      if (prior.expiryDate !== expiryDate) {
+        // 数量減少と期限変更が同時に起きるとどのバッチが対応するか安全に特定できないため、期限側は変更しない
+        skippedExpiryUpdates.push(name);
+      }
     } else {
-      newInventoryAdditions.push(prior);
+      // 数量は変わらない：期限だけが変更されていれば、対応するバッチを安全に特定できる場合に限り置き換える
+      const synced = await trySyncExpiryDateOnly(name, invUnit, prior.expiryDate, prior.quantity, expiryDate);
+      if (!synced) skippedExpiryUpdates.push(name);
+      newInventoryAdditions.push(synced && prior.expiryDate !== expiryDate ? { ...prior, expiryDate } : prior);
     }
   }
 
@@ -130,5 +177,5 @@ export async function updatePurchaseWithInventory(
     receiptId,
   };
   await updatePurchase(updated);
-  return { purchase: updated, skippedReductions };
+  return { purchase: updated, skippedReductions, skippedExpiryUpdates };
 }

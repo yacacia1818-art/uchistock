@@ -370,10 +370,12 @@ button {
   background: var(--color-bg);
   border-radius: 999px;
   padding: 4px;
+  max-width: 100%;
 }
 .stepper button {
   width: 28px;
   height: 28px;
+  flex-shrink: 0;
   border-radius: 999px;
   border: none;
   background: var(--color-surface);
@@ -386,6 +388,7 @@ button {
 }
 .stepper span {
   min-width: 20px;
+  overflow-wrap: anywhere;
   text-align: center;
   font-weight: 700;
   font-size: 14px;

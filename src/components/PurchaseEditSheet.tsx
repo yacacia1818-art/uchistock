@@ -99,7 +99,7 @@ export function PurchaseEditSheet({ purchase, onClose, onSaved }: PurchaseEditSh
     }
     setSaving(true);
     try {
-      const { purchase: updated, skippedReductions } = await updatePurchaseWithInventory({
+      const { purchase: updated, skippedReductions, skippedExpiryUpdates } = await updatePurchaseWithInventory({
         purchase,
         date,
         storeName: storeName.trim() || undefined,
@@ -109,11 +109,10 @@ export function PurchaseEditSheet({ purchase, onClose, onSaved }: PurchaseEditSh
         receiptFile,
       });
       notifyDataChanged();
-      if (skippedReductions.length > 0) {
-        showToast(`保存しました（在庫は自動変更しませんでした：${skippedReductions.join('・')}）`);
-      } else {
-        showToast('購入記録を更新しました');
-      }
+      const notes: string[] = [];
+      if (skippedReductions.length > 0) notes.push(`在庫は自動変更しませんでした：${skippedReductions.join('・')}`);
+      if (skippedExpiryUpdates.length > 0) notes.push(`在庫の期限は自動更新しませんでした：${skippedExpiryUpdates.join('・')}`);
+      showToast(notes.length > 0 ? `保存しました（${notes.join('／')}）` : '購入記録を更新しました');
       onSaved(updated);
       onClose();
     } catch (e) {

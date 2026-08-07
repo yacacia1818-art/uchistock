@@ -21,6 +21,12 @@ export function IngredientUsageSelector({ ingredients, value, onChange }: Ingred
   const selectedMap = new Map(value.map((u) => [u.ingredientId, u]));
 
   function modeFor(ingredient: Ingredient): UsageMode {
+    // 既に選択済みの場合は、実際に保持している値の種類（usage.type）を必ず優先する。
+    // 単位から推測した既定モードを優先すると、編集画面を開いた直後など
+    // 「実際は割合(fraction)で保存されているのに個数(count)モードとして表示され、
+    // 生の小数（例: 0.3333333333333333）がそのまま出てしまう」不具合が起きるため
+    const selected = selectedMap.get(ingredient.id);
+    if (selected) return selected.usage.type;
     if (ingredient.quantity < 1) return 'fraction';
     return modeOverride[ingredient.id] ?? getUsageMode(ingredient.unit);
   }
@@ -106,21 +112,21 @@ export function IngredientUsageSelector({ ingredients, value, onChange }: Ingred
                         onClick={() =>
                           updateUsage(ingredient.id, {
                             type: 'count',
-                            value: Math.max(1, selected.usage.value - 1),
+                            value: Math.max(1, Math.round(selected.usage.value) - 1),
                           })
                         }
                       >
                         −
                       </button>
                       <span>
-                        {selected.usage.value}
-                        {ingredient.unit}使用
+                        {/* 万一rawなdecimal値が紛れ込んでいても、生の小数を画面に出さないための保険 */}
+                        {formatQuantity(selected.usage.value, ingredient.unit)}使用
                       </span>
                       <button
                         onClick={() =>
                           updateUsage(ingredient.id, {
                             type: 'count',
-                            value: Math.min(maxCount, selected.usage.value + 1),
+                            value: Math.min(maxCount, Math.round(selected.usage.value) + 1),
                           })
                         }
                       >

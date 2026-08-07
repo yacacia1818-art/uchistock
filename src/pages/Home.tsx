@@ -5,15 +5,15 @@ import { MealFormSheet } from '../components/MealFormSheet';
 import { PurchaseFormSheet } from '../components/PurchaseFormSheet';
 import { getSettings } from '../repositories/settingsRepo';
 import { getTodayMealsGroupedByType } from '../repositories/mealRepo';
-import { listIngredients } from '../repositories/ingredientRepo';
 import { getPeriodCost } from '../services/foodCost';
+import { listExpiringIngredients, type ExpiringIngredient } from '../services/expirySummary';
 import { getCurrentPeriod, formatPeriodRangeLabel, remainingDaysInPeriod } from '../utils/period';
-import { getEarliestExpiry, daysUntil, formatExpiryRelative } from '../utils/expiry';
+import { formatExpiryRelative } from '../utils/expiry';
 import { useDataVersion } from '../hooks/useDataVersion';
 import { useToast } from '../components/ToastProvider';
 import { toUserMessage } from '../utils/errors';
 import { mealContentLabel } from '../utils/mealDisplay';
-import type { Ingredient, Meal, MealType } from '../types';
+import type { Meal, MealType } from '../types';
 
 const MEAL_ROWS: { type: MealType; icon: typeof Sun }[] = [
   { type: '朝食', icon: Sun },
@@ -31,7 +31,7 @@ export function Home() {
   const [used, setUsed] = useState(0);
   const [startDay, setStartDay] = useState(1);
   const [todayMeals, setTodayMeals] = useState<Record<string, Meal[]>>({});
-  const [expiringIngredients, setExpiringIngredients] = useState<{ ingredient: Ingredient; days: number }[]>([]);
+  const [expiringIngredients, setExpiringIngredients] = useState<ExpiringIngredient[]>([]);
   const [showMealForm, setShowMealForm] = useState<MealType | null>(null);
   const [showPurchaseForm, setShowPurchaseForm] = useState(false);
 
@@ -41,27 +41,17 @@ export function Home() {
       try {
         const settings = await getSettings();
         const period = getCurrentPeriod(settings.budgetStartDay);
-        const [cost, meals, ingredients] = await Promise.all([
+        const [cost, meals, expiring] = await Promise.all([
           getPeriodCost(period),
           getTodayMealsGroupedByType(),
-          listIngredients(),
+          listExpiringIngredients(),
         ]);
         if (cancelled) return;
         setBudget(settings.monthlyBudget);
         setStartDay(settings.budgetStartDay ?? 1);
         setUsed(cost.used);
         setTodayMeals(meals);
-        const expiring = ingredients
-          .filter((i) => i.quantity > 0)
-          .map((i) => {
-            const earliest = getEarliestExpiry(i);
-            if (!earliest) return null;
-            const days = daysUntil(earliest);
-            return days <= EXPIRY_WARNING_DAYS ? { ingredient: i, days } : null;
-          })
-          .filter((x): x is { ingredient: Ingredient; days: number } => x !== null)
-          .sort((a, b) => a.days - b.days);
-        setExpiringIngredients(expiring);
+        setExpiringIngredients(expiring.filter((e) => e.days <= EXPIRY_WARNING_DAYS));
       } catch (e) {
         showToast(toUserMessage(e, 'データの読み込みに失敗しました'));
       }

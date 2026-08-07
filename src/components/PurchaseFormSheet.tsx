@@ -1,11 +1,12 @@
 import { useRef, useState } from 'react';
-import { Camera, ChevronDown, ChevronUp } from 'lucide-react';
+import { Camera, ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react';
 import { BottomSheet } from './BottomSheet';
 import { recordPurchase } from '../services/purchaseService';
 import { useToast } from './ToastProvider';
 import { notifyDataChanged } from '../utils/bus';
 import { toUserMessage } from '../utils/errors';
 import { parseMemoQuantity } from '../utils/quantity';
+import { generateId } from '../utils/id';
 import { UNIT_OPTIONS } from '../types';
 import type { ShoppingCategory, ShoppingMemoItem } from '../types';
 
@@ -14,17 +15,21 @@ interface PurchaseFormSheetProps {
   carriedItems?: ShoppingMemoItem[];
 }
 
-interface InventoryRow {
+interface PurchaseRow {
   id: string;
   name: string;
   category: ShoppingCategory;
-  checked: boolean;
-  quantity: number;
+  quantity: string;
   unit: string;
+  price: string;
+  addToInventory: boolean;
+  convertUnit: boolean;
+  invQuantity: string;
+  invUnit: string;
   expiryDate: string;
 }
 
-function buildInventoryRow(item: ShoppingMemoItem): InventoryRow {
+function buildRowFromMemoItem(item: ShoppingMemoItem): PurchaseRow {
   const category = item.category ?? '食品';
   const { quantity, unit } =
     item.quantityValue && item.unit
@@ -34,9 +39,29 @@ function buildInventoryRow(item: ShoppingMemoItem): InventoryRow {
     id: item.id,
     name: item.name,
     category,
-    checked: category === '食品',
-    quantity,
+    quantity: String(quantity),
     unit,
+    price: '',
+    addToInventory: category === '食品',
+    convertUnit: false,
+    invQuantity: String(quantity),
+    invUnit: unit,
+    expiryDate: '',
+  };
+}
+
+function blankRow(): PurchaseRow {
+  return {
+    id: generateId(),
+    name: '',
+    category: '食品',
+    quantity: '',
+    unit: '個',
+    price: '',
+    addToInventory: true,
+    convertUnit: false,
+    invQuantity: '',
+    invUnit: '個',
     expiryDate: '',
   };
 }
@@ -45,15 +70,10 @@ export function PurchaseFormSheet({ onClose, carriedItems }: PurchaseFormSheetPr
   const { showToast } = useToast();
   const [totalAmount, setTotalAmount] = useState('');
   const [storeName, setStoreName] = useState('');
-  const [itemsText, setItemsText] = useState(
-    carriedItems ? carriedItems.map((i) => i.name).join('\n') : ''
-  );
+  const [rows, setRows] = useState<PurchaseRow[]>((carriedItems ?? []).map(buildRowFromMemoItem));
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [inventoryRows, setInventoryRows] = useState<InventoryRow[]>(
-    (carriedItems ?? []).map(buildInventoryRow)
-  );
   const [showAmountSplit, setShowAmountSplit] = useState(false);
   const [foodAmount, setFoodAmount] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -65,8 +85,12 @@ export function PurchaseFormSheet({ onClose, carriedItems }: PurchaseFormSheetPr
     setReceiptPreview(URL.createObjectURL(file));
   }
 
-  function updateRow(id: string, patch: Partial<InventoryRow>) {
-    setInventoryRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  function updateRow(id: string, patch: Partial<PurchaseRow>) {
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  }
+
+  function removeRow(id: string) {
+    setRows((prev) => prev.filter((r) => r.id !== id));
   }
 
   async function handleSave() {
@@ -85,15 +109,33 @@ export function PurchaseFormSheet({ onClose, carriedItems }: PurchaseFormSheetPr
     }
     setSaving(true);
     try {
-      const items = itemsText
-        .split('\n')
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .map((name) => ({ name }));
+      const validRows = rows.filter((r) => r.name.trim());
 
-      const inventoryAdditions = inventoryRows
-        .filter((r) => r.checked && r.quantity > 0)
-        .map((r) => ({ name: r.name, unit: r.unit, quantity: r.quantity, expiryDate: r.expiryDate || undefined }));
+      const items = validRows.map((r) => {
+        const qty = r.quantity.trim() !== '' ? Number(r.quantity) : undefined;
+        return {
+          name: r.name.trim(),
+          quantity: qty !== undefined && Number.isFinite(qty) && qty > 0 ? qty : undefined,
+          unit: qty !== undefined && Number.isFinite(qty) && qty > 0 ? r.unit : undefined,
+          category: r.category,
+          price: r.price.trim() !== '' && Number.isFinite(Number(r.price)) ? Number(r.price) : undefined,
+          expiryDate: r.category === '食品' && r.expiryDate ? r.expiryDate : undefined,
+        };
+      });
+
+      const inventoryAdditions = validRows
+        .filter((r) => r.addToInventory)
+        .map((r) => {
+          const invQty = r.convertUnit ? r.invQuantity : r.quantity;
+          const invUnit = r.convertUnit ? r.invUnit : r.unit;
+          const qty = invQty.trim() !== '' ? Number(invQty) : 1;
+          return {
+            name: r.name.trim(),
+            unit: invUnit || '個',
+            quantity: Number.isFinite(qty) && qty > 0 ? qty : 1,
+            expiryDate: r.category === '食品' ? r.expiryDate || undefined : undefined,
+          };
+        });
 
       await recordPurchase({
         totalAmount: amountNum,
@@ -159,56 +201,124 @@ export function PurchaseFormSheet({ onClose, carriedItems }: PurchaseFormSheetPr
       </div>
 
       <div className="field">
-        <label>購入商品（任意・1行に1つ）</label>
-        <textarea
-          className="textarea"
-          value={itemsText}
-          onChange={(e) => setItemsText(e.target.value)}
-          placeholder={'例：\n卵\n牛乳'}
-        />
-      </div>
+        <label>購入したもの（任意）</label>
+        {rows.length > 0 && (
+          <div className="card mb-8" style={{ padding: '4px 12px' }}>
+            {rows.map((row) => (
+              <div key={row.id} style={{ padding: '10px 0', borderBottom: '1px solid var(--color-border)' }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                  <input
+                    className="input"
+                    style={{ flex: 1 }}
+                    placeholder="商品名"
+                    value={row.name}
+                    onChange={(e) => updateRow(row.id, { name: e.target.value })}
+                  />
+                  <button className="icon-btn" onClick={() => removeRow(row.id)} aria-label="削除">
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+                <div className="chip-row" style={{ marginBottom: 8 }}>
+                  {(['食品', '日用品'] as ShoppingCategory[]).map((c) => (
+                    <button
+                      key={c}
+                      className={`chip${row.category === c ? ' active' : ''}`}
+                      onClick={() => updateRow(row.id, { category: c, addToInventory: c === '食品' })}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+                  <input
+                    className="input"
+                    type="number"
+                    inputMode="decimal"
+                    placeholder="数量"
+                    style={{ width: 72, padding: '8px 10px' }}
+                    value={row.quantity}
+                    onChange={(e) => updateRow(row.id, { quantity: e.target.value })}
+                  />
+                  <select
+                    className="select"
+                    style={{ width: 84, padding: '8px 6px' }}
+                    value={row.unit}
+                    onChange={(e) => updateRow(row.id, { unit: e.target.value })}
+                  >
+                    {UNIT_OPTIONS.map((u) => (
+                      <option key={u} value={u}>
+                        {u}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    className="input"
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="価格（任意）"
+                    style={{ flex: 1, minWidth: 100, padding: '8px 10px' }}
+                    value={row.price}
+                    onChange={(e) => updateRow(row.id, { price: e.target.value })}
+                  />
+                  <span className="text-muted" style={{ alignSelf: 'center', fontSize: 13 }}>
+                    円
+                  </span>
+                </div>
 
-      {inventoryRows.length > 0 && (
-        <div className="field">
-          <label>在庫に追加</label>
-          <div className="card" style={{ padding: '4px 12px' }}>
-            {inventoryRows.map((row) => (
-              <div key={row.id} className="checkbox-row" style={{ flexWrap: 'wrap', gap: 8 }}>
-                <input
-                  type="checkbox"
-                  checked={row.checked}
-                  onChange={(e) => updateRow(row.id, { checked: e.target.checked })}
-                />
-                <span style={{ flex: 1, minWidth: 80 }}>
-                  {row.category === '日用品' && <span className="text-muted">🧻 </span>}
-                  {row.name}
-                </span>
-                {row.checked && (
-                  <>
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                      <input
-                        className="input"
-                        type="number"
-                        inputMode="decimal"
-                        style={{ width: 64, padding: '8px 10px' }}
-                        value={row.quantity}
-                        onChange={(e) => updateRow(row.id, { quantity: Math.max(0, Number(e.target.value)) })}
-                      />
-                      <select
-                        className="select"
-                        style={{ width: 84, padding: '8px 6px' }}
-                        value={row.unit}
-                        onChange={(e) => updateRow(row.id, { unit: e.target.value })}
-                      >
-                        {UNIT_OPTIONS.map((u) => (
-                          <option key={u} value={u}>
-                            {u}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                <label className="checkbox-row" style={{ padding: '4px 0', borderBottom: 'none' }}>
+                  <input
+                    type="checkbox"
+                    checked={row.addToInventory}
+                    onChange={(e) => updateRow(row.id, { addToInventory: e.target.checked })}
+                  />
+                  <span>在庫に追加</span>
+                </label>
+
+                {row.addToInventory && (
+                  <div style={{ paddingLeft: 4 }}>
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      style={{ fontSize: 12, padding: 0, marginBottom: row.convertUnit ? 8 : 0 }}
+                      onClick={() =>
+                        updateRow(row.id, {
+                          convertUnit: !row.convertUnit,
+                          invQuantity: row.invQuantity || row.quantity,
+                          invUnit: row.invUnit || row.unit,
+                        })
+                      }
+                    >
+                      {row.convertUnit ? '単位変換をやめる' : '在庫の単位を変更する（任意）'}
+                    </button>
+                    {row.convertUnit && (
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
+                        <span className="text-muted" style={{ fontSize: 12 }}>
+                          在庫へ
+                        </span>
+                        <input
+                          className="input"
+                          type="number"
+                          inputMode="decimal"
+                          style={{ width: 72, padding: '8px 10px' }}
+                          value={row.invQuantity}
+                          onChange={(e) => updateRow(row.id, { invQuantity: e.target.value })}
+                        />
+                        <select
+                          className="select"
+                          style={{ width: 84, padding: '8px 6px' }}
+                          value={row.invUnit}
+                          onChange={(e) => updateRow(row.id, { invUnit: e.target.value })}
+                        >
+                          {UNIT_OPTIONS.map((u) => (
+                            <option key={u} value={u}>
+                              {u}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                     {row.category === '食品' && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <span className="text-muted" style={{ fontSize: 12 }}>
                           期限
                         </span>
@@ -221,16 +331,19 @@ export function PurchaseFormSheet({ onClose, carriedItems }: PurchaseFormSheetPr
                         />
                       </div>
                     )}
-                  </>
+                  </div>
                 )}
               </div>
             ))}
           </div>
-          <p className="text-muted mt-8" style={{ fontSize: 12 }}>
-            ※ チェックを外すと在庫には追加されません。日用品は初期状態でOFFになっています。
-          </p>
-        </div>
-      )}
+        )}
+        <button type="button" className="btn btn-outline" onClick={() => setRows((prev) => [...prev, blankRow()])}>
+          <Plus size={16} /> 商品を追加
+        </button>
+        <p className="text-muted mt-8" style={{ fontSize: 12 }}>
+          ※ 商品を追加しなくても合計金額だけで保存できます。日用品は在庫追加が初期状態でOFFです。
+        </p>
+      </div>
 
       <div className="field">
         <label>レシート画像（任意）</label>

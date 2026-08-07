@@ -8,8 +8,13 @@ interface IngredientUsageSelectorProps {
   onChange: (usages: IngredientUsage[]) => void;
 }
 
+interface CustomFractionInput {
+  num: string;
+  den: string;
+}
+
 export function IngredientUsageSelector({ ingredients, value, onChange }: IngredientUsageSelectorProps) {
-  const [customFractions, setCustomFractions] = useState<Record<string, string>>({});
+  const [customFractions, setCustomFractions] = useState<Record<string, CustomFractionInput>>({});
 
   const available = ingredients.filter((i) => i.quantity > 0);
   const selectedMap = new Map(value.map((u) => [u.ingredientId, u]));
@@ -20,8 +25,9 @@ export function IngredientUsageSelector({ ingredients, value, onChange }: Ingred
       return;
     }
     const mode = getUsageMode(ingredient.unit);
+    const defaultValue = mode === 'count' ? 1 : Math.min(1 / 3, ingredient.quantity);
     const defaultAmount: UsageAmount =
-      mode === 'count' ? { type: 'count', value: 1 } : { type: 'fraction', value: 1 / 3 };
+      mode === 'count' ? { type: 'count', value: defaultValue } : { type: 'fraction', value: defaultValue };
     onChange([
       ...value,
       { ingredientId: ingredient.id, ingredientName: ingredient.name, unit: ingredient.unit, usage: defaultAmount },
@@ -30,6 +36,12 @@ export function IngredientUsageSelector({ ingredients, value, onChange }: Ingred
 
   function updateUsage(ingredientId: string, usage: UsageAmount) {
     onChange(value.map((u) => (u.ingredientId === ingredientId ? { ...u, usage } : u)));
+  }
+
+  function selectFraction(ingredient: Ingredient, rawValue: number) {
+    // 在庫を超える使用量は選択できないよう、残量までクランプする（マイナス在庫防止）
+    const clamped = Math.min(rawValue, ingredient.quantity);
+    updateUsage(ingredient.id, { type: 'fraction', value: clamped });
   }
 
   return (
@@ -43,6 +55,7 @@ export function IngredientUsageSelector({ ingredients, value, onChange }: Ingred
           const selected = selectedMap.get(ingredient.id);
           const mode = getUsageMode(ingredient.unit);
           const maxCount = Math.max(1, Math.floor(ingredient.quantity));
+          const custom = customFractions[ingredient.id];
           return (
             <div key={ingredient.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
               <label className="checkbox-row" style={{ borderBottom: 'none' }}>
@@ -83,16 +96,16 @@ export function IngredientUsageSelector({ ingredients, value, onChange }: Ingred
                     </div>
                   ) : (
                     <>
-                      <div className="chip-row" style={{ marginBottom: 0 }}>
+                      <div className="chip-row wrap" style={{ marginBottom: 0 }}>
                         {FRACTION_CHOICES.map((choice) => {
                           const isCustom = choice.value === 'custom';
                           const isAll = choice.value === 'all';
                           const active =
-                            (isAll && selected.usage.value === ingredient.quantity) ||
+                            (isAll && Math.abs(selected.usage.value - ingredient.quantity) < 1e-9) ||
                             (!isAll &&
                               !isCustom &&
                               typeof choice.value === 'number' &&
-                              Math.abs(selected.usage.value - choice.value) < 0.01);
+                              Math.abs(selected.usage.value - Math.min(choice.value, ingredient.quantity)) < 1e-9);
                           return (
                             <button
                               key={choice.label}
@@ -101,9 +114,9 @@ export function IngredientUsageSelector({ ingredients, value, onChange }: Ingred
                                 if (isAll) {
                                   updateUsage(ingredient.id, { type: 'fraction', value: ingredient.quantity });
                                 } else if (isCustom) {
-                                  setCustomFractions((prev) => ({ ...prev, [ingredient.id]: '' }));
+                                  setCustomFractions((prev) => ({ ...prev, [ingredient.id]: { num: '', den: '' } }));
                                 } else if (typeof choice.value === 'number') {
-                                  updateUsage(ingredient.id, { type: 'fraction', value: choice.value });
+                                  selectFraction(ingredient, choice.value);
                                 }
                               }}
                             >
@@ -112,22 +125,43 @@ export function IngredientUsageSelector({ ingredients, value, onChange }: Ingred
                           );
                         })}
                       </div>
-                      {customFractions[ingredient.id] !== undefined && (
-                        <input
-                          className="input mt-8"
-                          type="number"
-                          inputMode="decimal"
-                          placeholder={`使用量（${ingredient.unit}）例：0.2`}
-                          value={customFractions[ingredient.id]}
-                          onChange={(e) => {
-                            const raw = e.target.value;
-                            setCustomFractions((prev) => ({ ...prev, [ingredient.id]: raw }));
-                            const num = Number(raw);
-                            if (raw.trim() !== '' && Number.isFinite(num) && num > 0) {
-                              updateUsage(ingredient.id, { type: 'fraction', value: num });
-                            }
-                          }}
-                        />
+                      {custom !== undefined && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                          <input
+                            className="input"
+                            type="number"
+                            inputMode="numeric"
+                            placeholder="分子"
+                            style={{ width: 64, padding: '8px 10px', textAlign: 'center' }}
+                            value={custom.num}
+                            onChange={(e) => {
+                              const num = e.target.value;
+                              setCustomFractions((prev) => ({ ...prev, [ingredient.id]: { ...custom, num } }));
+                              const n = Number(num);
+                              const d = Number(custom.den);
+                              if (n > 0 && d > 0) selectFraction(ingredient, n / d);
+                            }}
+                          />
+                          <span>／</span>
+                          <input
+                            className="input"
+                            type="number"
+                            inputMode="numeric"
+                            placeholder="分母"
+                            style={{ width: 64, padding: '8px 10px', textAlign: 'center' }}
+                            value={custom.den}
+                            onChange={(e) => {
+                              const den = e.target.value;
+                              setCustomFractions((prev) => ({ ...prev, [ingredient.id]: { ...custom, den } }));
+                              const n = Number(custom.num);
+                              const d = Number(den);
+                              if (n > 0 && d > 0) selectFraction(ingredient, n / d);
+                            }}
+                          />
+                          <span className="text-muted" style={{ fontSize: 13 }}>
+                            使用
+                          </span>
+                        </div>
                       )}
                     </>
                   )}

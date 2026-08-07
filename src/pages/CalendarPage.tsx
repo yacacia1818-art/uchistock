@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Header } from '../components/Header';
 import { listMealsByMonth } from '../repositories/mealRepo';
@@ -7,8 +8,9 @@ import { listCookedDishesByMonth } from '../repositories/cookedDishRepo';
 import { listIngredients } from '../repositories/ingredientRepo';
 import { getSettings } from '../repositories/settingsRepo';
 import { getPeriodCost, foodPortionOf } from '../services/foodCost';
+import { listExpiringIngredients, type ExpiringIngredient } from '../services/expirySummary';
 import { getCurrentPeriod, formatPeriodRangeLabel } from '../utils/period';
-import { getExpiryDates } from '../utils/expiry';
+import { getExpiryDates, formatExpiryRelative } from '../utils/expiry';
 import {
   addMonths,
   currentYearMonth,
@@ -28,6 +30,7 @@ const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 const MEAL_ORDER: MealType[] = ['朝食', '昼食', '夕食', '間食'];
 
 export function CalendarPage() {
+  const navigate = useNavigate();
   const { showToast } = useToast();
   const version = useDataVersion();
   const [ym, setYm] = useState(currentYearMonth());
@@ -35,6 +38,7 @@ export function CalendarPage() {
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [cookedDishes, setCookedDishes] = useState<CookedDish[]>([]);
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
+  const [expiringList, setExpiringList] = useState<ExpiringIngredient[]>([]);
   const [budget, setBudget] = useState(15000);
   const [periodUsed, setPeriodUsed] = useState(0);
   const [periodLabel, setPeriodLabel] = useState('');
@@ -47,12 +51,14 @@ export function CalendarPage() {
       listCookedDishesByMonth(ym),
       listIngredients(),
       getSettings(),
+      listExpiringIngredients(),
     ])
-      .then(async ([m, p, c, ing, s]) => {
+      .then(async ([m, p, c, ing, s, expiring]) => {
         setMeals(m);
         setPurchases(p);
         setCookedDishes(c);
         setIngredients(ing);
+        setExpiringList(expiring);
         setBudget(s.monthlyBudget);
         const period = getCurrentPeriod(s.budgetStartDay);
         setPeriodLabel(formatPeriodRangeLabel(period));
@@ -162,6 +168,34 @@ export function CalendarPage() {
               );
             })}
           </div>
+        </div>
+
+        <div className="card mb-16">
+          <div className="section-title">⏰ 期限が近い食材</div>
+          {expiringList.length === 0 ? (
+            <p className="text-muted" style={{ fontSize: 13 }}>
+              期限が設定された食材はありません
+            </p>
+          ) : (
+            expiringList.map(({ ingredient, days }) => (
+              <button
+                key={ingredient.id}
+                className="link-row"
+                style={{ width: '100%', border: 'none', background: 'none', textAlign: 'left', font: 'inherit' }}
+                onClick={() => navigate('/ingredients')}
+              >
+                <span
+                  className={days <= 0 ? '' : 'text-muted'}
+                  style={{ fontWeight: 700, color: days <= 0 ? 'var(--color-danger)' : undefined }}
+                >
+                  {formatExpiryRelative(days)}
+                </span>
+                <span>
+                  {ingredient.name}　{formatQuantity(ingredient.quantity, ingredient.unit)}
+                </span>
+              </button>
+            ))
+          )}
         </div>
 
         <div className="card">

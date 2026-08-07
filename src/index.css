@@ -301,6 +301,10 @@ button {
 .chip-row::-webkit-scrollbar {
   display: none;
 }
+.chip-row.wrap {
+  flex-wrap: wrap;
+  overflow-x: visible;
+}
 .chip {
   flex: 0 0 auto;
   padding: 8px 14px;

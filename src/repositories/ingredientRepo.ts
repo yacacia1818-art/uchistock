@@ -3,6 +3,7 @@ import type { Ingredient } from '../types';
 import { generateId } from '../utils/id';
 import { nowIsoStr } from '../utils/date';
 import { AppError } from '../utils/errors';
+import { snapQuantity } from '../utils/quantity';
 
 function normalize(ingredient: Ingredient): Ingredient {
   if (typeof ingredient.quantity === 'number' && ingredient.unit) return ingredient;
@@ -86,7 +87,7 @@ export async function addOrMergeIngredient(
     const all = (await db.getAll('ingredients')).map(normalize);
     const existing = all.find((i) => i.name.trim() === name.trim() && i.unit === unit);
     if (existing) {
-      const nextQuantity = Math.round((existing.quantity + quantity) * 10000) / 10000;
+      const nextQuantity = snapQuantity(existing.quantity + quantity);
       let expiryBatches = existing.expiryBatches;
       let nextExpiryDate = existing.expiryDate;
       if (expiryDate) {
@@ -138,7 +139,7 @@ export async function decrementIngredientQuantity(id: string, amount: number): P
     const ing = await db.get('ingredients', id);
     if (!ing) return undefined;
     const current = normalize(ing);
-    const nextQuantity = Math.max(0, Math.round((current.quantity - amount) * 10000) / 10000);
+    const nextQuantity = snapQuantity(current.quantity - amount);
     const updated: Ingredient = clearExpiryIfEmpty({
       ...current,
       quantity: nextQuantity,

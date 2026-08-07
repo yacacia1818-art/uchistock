@@ -1,4 +1,5 @@
 import type { ShoppingMemoItem, UsageAmount } from '../types';
+import { formatFraction, snapToFraction, fractionToDecimal } from './fraction';
 
 // パック・袋・玉など「まとめ買いして少しずつ使う」単位（割合選択UIを使う）
 const FRACTION_UNITS = new Set(['パック', '袋', '玉']);
@@ -22,61 +23,38 @@ export function parseMemoQuantity(raw: string | undefined): { quantity: number; 
 }
 
 export const FRACTION_CHOICES: { label: string; value: number | 'all' | 'custom' }[] = [
-  { label: '1/4', value: 1 / 4 },
-  { label: '1/3', value: 1 / 3 },
   { label: '1/2', value: 1 / 2 },
+  { label: '1/3', value: 1 / 3 },
+  { label: '1/4', value: 1 / 4 },
+  { label: '1/5', value: 1 / 5 },
+  { label: '1/6', value: 1 / 6 },
   { label: '全部', value: 'all' },
   { label: 'その他', value: 'custom' },
 ];
 
-// quantityから残量表示用の文字列を作る（パック等は分数寄せ、個数系は整数表示）
-const NEAR_FRACTIONS: { value: number; label: string }[] = [
-  { value: 0, label: '0' },
-  { value: 1 / 4, label: '1/4' },
-  { value: 1 / 3, label: '1/3' },
-  { value: 1 / 2, label: '1/2' },
-  { value: 2 / 3, label: '2/3' },
-  { value: 3 / 4, label: '3/4' },
-  { value: 1, label: '1' },
-];
-
-function nearestFraction(remainder: number): { label: string; exact: boolean } {
-  let best = NEAR_FRACTIONS[0];
-  let bestDiff = Infinity;
-  for (const f of NEAR_FRACTIONS) {
-    const diff = Math.abs(f.value - remainder);
-    if (diff < bestDiff) {
-      bestDiff = diff;
-      best = f;
-    }
-  }
-  return { label: best.label, exact: bestDiff < 0.02 };
-}
-
+// quantityから残量表示用の文字列を作る（パック等は自然な分数表記、個数系は整数表示）
 export function formatQuantity(quantity: number, unit: string): string {
   const safe = Math.max(0, quantity);
   if (getUsageMode(unit) === 'count') {
     return `${Math.round(safe)}${unit}`;
   }
-  const whole = Math.floor(safe + 1e-6);
-  const remainder = safe - whole;
-  const { label, exact } = nearestFraction(remainder);
-  const approx = exact ? '' : '約';
-  if (label === '0' || label === '') {
-    return whole === 0 ? `${approx}0${unit}` : `${whole}${unit}`;
-  }
-  if (label === '1') {
-    return `${whole + 1}${unit}`;
-  }
-  if (whole === 0) {
-    return `${approx}${label}${unit}`;
-  }
-  return `${approx}${whole}と${label}${unit}`;
+  return formatFraction(safe, unit);
 }
 
+// 浮動小数点誤差を防ぐため、分数として妥当な値へスナップしてから減算する
 export function applyUsage(quantity: number, usage: UsageAmount): number {
   const next = quantity - usage.value;
-  return Math.max(0, Math.round(next * 10000) / 10000);
+  return snapQuantity(next);
+}
+
+// 演算結果を分母60までの自然な分数へスナップして保存する（誤差の蓄積防止）
+export function snapQuantity(quantity: number): number {
+  const safe = Math.max(0, quantity);
+  const whole = Math.floor(safe + 1e-9);
+  const remainder = safe - whole;
+  if (remainder < 1e-9) return whole;
+  const frac = snapToFraction(remainder, 60);
+  return whole + fractionToDecimal(frac);
 }
 
 // 買い物メモの数量表示（新: 構造化フィールド優先、旧: 自由入力文字列にフォールバック）

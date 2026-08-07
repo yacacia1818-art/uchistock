@@ -183,6 +183,12 @@ export function Records() {
             <label>合計金額</label>
             <div style={{ fontSize: 22, fontWeight: 800 }}>¥{selectedPurchase.totalAmount.toLocaleString()}</div>
           </div>
+          {selectedPurchase.foodAmount !== undefined && selectedPurchase.foodAmount !== selectedPurchase.totalAmount && (
+            <div className="field">
+              <label>食費として計上した金額</label>
+              <div>¥{selectedPurchase.foodAmount.toLocaleString()}</div>
+            </div>
+          )}
           {selectedPurchase.storeName && (
             <div className="field">
               <label>店名</label>
@@ -192,7 +198,27 @@ export function Records() {
           {selectedPurchase.items && selectedPurchase.items.length > 0 && (
             <div className="field">
               <label>購入商品</label>
-              <div>{selectedPurchase.items.map((i) => i.name).join('・')}</div>
+              <div className="card" style={{ padding: '4px 12px' }}>
+                {selectedPurchase.items.map((item, idx) => (
+                  <div className="list-row" key={idx} style={{ alignItems: 'flex-start' }}>
+                    <div className="row-emoji">{item.category === '日用品' ? '🧻' : '🛒'}</div>
+                    <div className="row-main">
+                      <div className="row-title">{item.name}</div>
+                      <div className="row-sub">
+                        {[
+                          item.quantity !== undefined && item.unit ? `${item.quantity}${item.unit}` : null,
+                          item.price !== undefined ? `¥${item.price.toLocaleString()}` : '価格未入力',
+                        ]
+                          .filter(Boolean)
+                          .join(' ・ ')}
+                      </div>
+                      {item.expiryDate && (
+                        <div className="row-sub">期限 {formatDateLabel(item.expiryDate).replace(/（.*）/, '')}</div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
           {selectedPurchase.receiptId && (

@@ -50,7 +50,11 @@ export interface ShoppingMemoItem {
 
 export interface PurchaseItem {
   name: string;
-  price?: number;
+  quantity?: number; // 購入時の数量（レシート上の数量、例：1パック）
+  unit?: string;
+  category?: ShoppingCategory;
+  price?: number; // 個別価格（任意・合計金額と一致している必要はない）
+  expiryDate?: string; // YYYY-MM-DD（食品のみ想定）
 }
 
 export interface InventoryAddition {

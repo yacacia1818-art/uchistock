@@ -9,7 +9,7 @@ import { formatDateLabel } from '../utils/date';
 import { formatQuantity, formatUsage, formatMemoQuantity } from '../utils/quantity';
 import { mealContentLabel } from '../utils/mealDisplay';
 import { getEarliestExpiry, daysUntil, formatExpiryRelative } from '../utils/expiry';
-import type { Ingredient, Meal, CookedDish } from '../types';
+import type { Ingredient, Meal, CookedDish, Purchase } from '../types';
 
 export type AiConsultTopic = 'menu' | 'nutrition' | 'shopping' | 'saving' | 'useup' | 'all';
 
@@ -66,6 +66,17 @@ function formatMealsByDate(meals: Meal[]): string {
     }
   }
   return lines.join('\n');
+}
+
+function formatPurchaseBlock(p: Purchase): string {
+  const header = `${formatDateLabel(p.date).replace(/（.*）/, '')}\n合計：${p.totalAmount.toLocaleString()}円${p.storeName ? `（${p.storeName}）` : ''}`;
+  if (!p.items || p.items.length === 0) return header;
+  const itemLines = p.items.map((item) => {
+    const qty = item.quantity !== undefined && item.unit ? ` ${item.quantity}${item.unit}` : '';
+    const price = item.price !== undefined ? `：${item.price.toLocaleString()}円` : '';
+    return `・${item.name}${qty}${price}`;
+  });
+  return [header, ...itemLines].join('\n');
 }
 
 function formatCookingHistory(dishes: CookedDish[]): string {
@@ -168,13 +179,8 @@ export async function buildAiConsultText(topic: AiConsultTopic): Promise<string>
   sections.push(
     [
       '【最近の買い物】',
-      ...(recentPurchases.length > 0
-        ? recentPurchases.map(
-            (p) =>
-              `・${formatDateLabel(p.date).replace(/（.*）/, '')} ${p.totalAmount.toLocaleString()}円${p.storeName ? `（${p.storeName}）` : ''}`
-          )
-        : ['なし']),
-    ].join('\n')
+      ...(recentPurchases.length > 0 ? recentPurchases.map(formatPurchaseBlock) : ['なし']),
+    ].join('\n\n')
   );
 
   sections.push(['【相談】', TOPIC_QUESTIONS[topic]].join('\n'));

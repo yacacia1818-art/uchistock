@@ -7,6 +7,7 @@ import {
   Leaf,
   ShoppingCart,
   Coins,
+  Recycle,
   Info,
   Settings as SettingsIcon,
   Star,
@@ -33,6 +34,7 @@ const AI_BUTTONS: { topic: AiConsultTopic; label: string; icon: typeof ChefHat }
   { topic: 'nutrition', label: '栄養バランス', icon: Leaf },
   { topic: 'shopping', label: '買い物の相談', icon: ShoppingCart },
   { topic: 'saving', label: '節約の相談', icon: Coins },
+  { topic: 'useup', label: '食材を使い切る相談', icon: Recycle },
 ];
 
 export function More() {

@@ -10,6 +10,7 @@ import { currentYearMonth, remainingDaysInMonth } from '../utils/date';
 import { useDataVersion } from '../hooks/useDataVersion';
 import { useToast } from '../components/ToastProvider';
 import { toUserMessage } from '../utils/errors';
+import { mealContentLabel } from '../utils/mealDisplay';
 import type { Meal, MealType } from '../types';
 
 const MEAL_ROWS: { type: MealType; icon: typeof Sun }[] = [
@@ -57,12 +58,7 @@ export function Home() {
 
   function mealSummary(meal: Meal | undefined): string {
     if (!meal) return '未記録';
-    if (meal.dishName) return meal.dishName;
-    if (meal.mealKind === 'home' && meal.ingredientNames && meal.ingredientNames.length > 0) {
-      return meal.ingredientNames.join('・');
-    }
-    if (meal.mealKind === 'eatout') return '外食';
-    return '記録あり';
+    return mealContentLabel(meal);
   }
 
   return (

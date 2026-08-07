@@ -4,10 +4,10 @@ import { addIngredient } from '../repositories/ingredientRepo';
 import { useToast } from './ToastProvider';
 import { notifyDataChanged } from '../utils/bus';
 import { toUserMessage } from '../utils/errors';
-import type { IngredientCategory, RoughLevel, TrackType } from '../types';
+import { UNIT_OPTIONS } from '../types';
+import type { IngredientCategory } from '../types';
 
 const CATEGORIES: IngredientCategory[] = ['野菜', '肉・魚', '卵・乳製品', '主食', 'その他'];
-const ROUGH_LEVELS: RoughLevel[] = ['多い', '半分', '少ない', 'なし'];
 
 interface AddIngredientSheetProps {
   onClose: () => void;
@@ -17,11 +17,12 @@ export function AddIngredientSheet({ onClose }: AddIngredientSheetProps) {
   const { showToast } = useToast();
   const [name, setName] = useState('');
   const [category, setCategory] = useState<IngredientCategory>('その他');
-  const [trackType, setTrackType] = useState<TrackType>('rough');
-  const [count, setCount] = useState(1);
-  const [unit, setUnit] = useState('個');
-  const [roughLevel, setRoughLevel] = useState<RoughLevel>('多い');
+  const [unit, setUnit] = useState<string>('個');
+  const [customUnit, setCustomUnit] = useState('');
+  const [quantity, setQuantity] = useState(1);
   const [saving, setSaving] = useState(false);
+
+  const resolvedUnit = unit === 'その他' ? customUnit.trim() || 'その他' : unit;
 
   async function handleSave() {
     if (!name.trim()) {
@@ -33,10 +34,8 @@ export function AddIngredientSheet({ onClose }: AddIngredientSheetProps) {
       await addIngredient({
         name: name.trim(),
         category,
-        trackType,
-        count: trackType === 'count' ? count : undefined,
-        unit: trackType === 'count' ? unit : undefined,
-        roughLevel: trackType === 'rough' ? roughLevel : undefined,
+        unit: resolvedUnit,
+        quantity,
       });
       notifyDataChanged();
       showToast('食材を追加しました');
@@ -71,54 +70,35 @@ export function AddIngredientSheet({ onClose }: AddIngredientSheetProps) {
       </div>
 
       <div className="field">
-        <label>管理方式</label>
-        <div className="tabs">
-          <button
-            className={`tab${trackType === 'rough' ? ' active' : ''}`}
-            onClick={() => setTrackType('rough')}
-          >
-            ざっくり残量
-          </button>
-          <button
-            className={`tab${trackType === 'count' ? ' active' : ''}`}
-            onClick={() => setTrackType('count')}
-          >
-            数量管理
-          </button>
+        <label>単位</label>
+        <div className="chip-row">
+          {UNIT_OPTIONS.map((u) => (
+            <button key={u} className={`chip${unit === u ? ' active' : ''}`} onClick={() => setUnit(u)}>
+              {u}
+            </button>
+          ))}
         </div>
+        {unit === 'その他' && (
+          <input
+            className="input mt-8"
+            placeholder="単位を入力（例：束）"
+            value={customUnit}
+            onChange={(e) => setCustomUnit(e.target.value)}
+          />
+        )}
       </div>
 
-      {trackType === 'rough' ? (
-        <div className="field">
-          <label>残量</label>
-          <div className="chip-row">
-            {ROUGH_LEVELS.map((r) => (
-              <button
-                key={r}
-                className={`chip${roughLevel === r ? ' active' : ''}`}
-                onClick={() => setRoughLevel(r)}
-              >
-                {r}
-              </button>
-            ))}
-          </div>
+      <div className="field">
+        <label>数量</label>
+        <div className="stepper" style={{ justifyContent: 'space-between' }}>
+          <button onClick={() => setQuantity((q) => Math.max(0, q - 1))}>−</button>
+          <span>
+            {quantity}
+            {resolvedUnit}
+          </span>
+          <button onClick={() => setQuantity((q) => q + 1)}>＋</button>
         </div>
-      ) : (
-        <div className="grid-2">
-          <div className="field">
-            <label>数量</label>
-            <div className="stepper" style={{ justifyContent: 'space-between' }}>
-              <button onClick={() => setCount((c) => Math.max(0, c - 1))}>−</button>
-              <span>{count}</span>
-              <button onClick={() => setCount((c) => c + 1)}>＋</button>
-            </div>
-          </div>
-          <div className="field">
-            <label>単位</label>
-            <input className="input" value={unit} onChange={(e) => setUnit(e.target.value)} />
-          </div>
-        </div>
-      )}
+      </div>
 
       <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
         追加する

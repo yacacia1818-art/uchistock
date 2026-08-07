@@ -3,43 +3,54 @@ import { ClipboardList, Image as ImageIcon, Plus, Sun, Moon, Cookie } from 'luci
 import { Header } from '../components/Header';
 import { BottomSheet } from '../components/BottomSheet';
 import { MealFormSheet } from '../components/MealFormSheet';
+import { CookingFormSheet } from '../components/CookingFormSheet';
 import { PurchaseFormSheet } from '../components/PurchaseFormSheet';
 import { ReceiptViewer } from '../components/ReceiptViewer';
+import { RecordTypeChooserSheet, type RecordChoice } from '../components/RecordTypeChooserSheet';
 import { listMeals } from '../repositories/mealRepo';
 import { listPurchases } from '../repositories/purchaseRepo';
+import { listCookedDishes } from '../repositories/cookedDishRepo';
 import { useDataVersion } from '../hooks/useDataVersion';
 import { useToast } from '../components/ToastProvider';
 import { toUserMessage } from '../utils/errors';
 import { formatDateLabel } from '../utils/date';
-import type { Meal, Purchase } from '../types';
+import { formatQuantity } from '../utils/quantity';
+import { mealContentLabel, mealSubLabel } from '../utils/mealDisplay';
+import type { CookedDish, Meal, Purchase } from '../types';
 
 const MEAL_ICON = { 朝食: Sun, 昼食: Sun, 夕食: Moon, 間食: Cookie } as const;
+
+type RecordsTab = 'meals' | 'cooking' | 'purchases';
 
 export function Records() {
   const { showToast } = useToast();
   const version = useDataVersion();
-  const [tab, setTab] = useState<'meals' | 'purchases'>('meals');
+  const [tab, setTab] = useState<RecordsTab>('meals');
   const [meals, setMeals] = useState<Meal[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [cookedDishes, setCookedDishes] = useState<CookedDish[]>([]);
+  const [showChooser, setShowChooser] = useState(false);
   const [showMealForm, setShowMealForm] = useState(false);
+  const [showCookingForm, setShowCookingForm] = useState(false);
   const [showPurchaseForm, setShowPurchaseForm] = useState(false);
   const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null);
   const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([listMeals(), listPurchases()])
-      .then(([m, p]) => {
+    Promise.all([listMeals(), listPurchases(), listCookedDishes()])
+      .then(([m, p, c]) => {
         setMeals(m);
         setPurchases(p);
+        setCookedDishes(c);
       })
       .catch((e) => showToast(toUserMessage(e, 'データの読み込みに失敗しました')));
   }, [version, showToast]);
 
-  function mealContent(meal: Meal): string {
-    if (meal.dishName) return meal.dishName;
-    if (meal.mealKind === 'home' && meal.ingredientNames?.length) return meal.ingredientNames.join('・');
-    if (meal.mealKind === 'eatout') return '外食';
-    return '記録あり';
+  function handleChoose(choice: RecordChoice) {
+    setShowChooser(false);
+    if (choice === 'meal') setShowMealForm(true);
+    else if (choice === 'cooking') setShowCookingForm(true);
+    else setShowPurchaseForm(true);
   }
 
   return (
@@ -48,41 +59,42 @@ export function Records() {
         icon={<ClipboardList size={20} />}
         title="記録"
         actions={
-          <button
-            className="btn btn-primary btn-sm"
-            onClick={() => (tab === 'meals' ? setShowMealForm(true) : setShowPurchaseForm(true))}
-          >
-            <Plus size={16} /> {tab === 'meals' ? '食事を記録' : '買い物を記録'}
+          <button className="btn btn-primary btn-sm" onClick={() => setShowChooser(true)}>
+            <Plus size={16} /> 記録
           </button>
         }
       />
       <div className="page-content">
         <div className="tabs">
           <button className={`tab${tab === 'meals' ? ' active' : ''}`} onClick={() => setTab('meals')}>
-            食事の記録
+            食事
+          </button>
+          <button className={`tab${tab === 'cooking' ? ' active' : ''}`} onClick={() => setTab('cooking')}>
+            調理
           </button>
           <button className={`tab${tab === 'purchases' ? ' active' : ''}`} onClick={() => setTab('purchases')}>
-            購入履歴
+            購入
           </button>
         </div>
 
-        {tab === 'meals' ? (
+        {tab === 'meals' && (
           <div className="card">
             {meals.length === 0 ? (
               <div className="empty-state">まだ食事記録がありません</div>
             ) : (
               meals.map((m) => {
                 const Icon = MEAL_ICON[m.mealType];
+                const sub = mealSubLabel(m);
                 return (
                   <div className="list-row" key={m.id}>
                     <div className="row-emoji">
                       <Icon size={18} />
                     </div>
                     <div className="row-main">
-                      <div className="row-title">{mealContent(m)}</div>
+                      <div className="row-title">{mealContentLabel(m)}</div>
                       <div className="row-sub">
                         {formatDateLabel(m.date)} ・ {m.mealType}
-                        {m.mealKind === 'eatout' && m.amount !== undefined && ` ・ ¥${m.amount.toLocaleString()}`}
+                        {sub && ` ・ ${sub}`}
                       </div>
                     </div>
                   </div>
@@ -90,7 +102,43 @@ export function Records() {
               })
             )}
           </div>
-        ) : (
+        )}
+
+        {tab === 'cooking' && (
+          <div className="card">
+            {cookedDishes.length === 0 ? (
+              <div className="empty-state">まだ調理記録がありません</div>
+            ) : (
+              cookedDishes.map((dish) => (
+                <div className="list-row" key={dish.id} style={{ alignItems: 'flex-start' }}>
+                  <div className="row-emoji">🍳</div>
+                  <div className="row-main">
+                    <div className="row-title">{dish.name}</div>
+                    <div className="row-sub">
+                      {formatDateLabel(dish.date)} {dish.time}
+                    </div>
+                    {dish.ingredientUsages.length > 0 && (
+                      <div className="row-sub mt-8">
+                        使用食材：
+                        {dish.ingredientUsages
+                          .map((u) => `${u.ingredientName} ${formatQuantity(u.usage.value, u.unit)}`)
+                          .join('・')}
+                      </div>
+                    )}
+                    {dish.servings !== undefined && (
+                      <div className="row-sub">
+                        完成量：{dish.servings}食分
+                        {dish.servingsRemaining !== undefined && `（残り${dish.servingsRemaining}食）`}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {tab === 'purchases' && (
           <div className="card">
             {purchases.length === 0 ? (
               <div className="empty-state">まだ購入履歴がありません</div>
@@ -118,7 +166,11 @@ export function Records() {
         )}
       </div>
 
+      {showChooser && (
+        <RecordTypeChooserSheet onClose={() => setShowChooser(false)} onChoose={handleChoose} />
+      )}
       {showMealForm && <MealFormSheet onClose={() => setShowMealForm(false)} />}
+      {showCookingForm && <CookingFormSheet onClose={() => setShowCookingForm(false)} />}
       {showPurchaseForm && <PurchaseFormSheet onClose={() => setShowPurchaseForm(false)} />}
 
       {selectedPurchase && (

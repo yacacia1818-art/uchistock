@@ -97,7 +97,11 @@ export function RecipeDetail() {
 
       {showEdit && <RecipeFormSheet existing={recipe} onClose={() => setShowEdit(false)} onSaved={setRecipe} />}
       {showMealForm && (
-        <MealFormSheet initialDishName={recipe.name} onClose={() => setShowMealForm(false)} />
+        <MealFormSheet
+          initialDishName={recipe.name}
+          initialHomeSource="cookNow"
+          onClose={() => setShowMealForm(false)}
+        />
       )}
     </>
   );

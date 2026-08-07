@@ -50,7 +50,6 @@ export function Ingredients() {
 
   const filteredIngredients = useMemo(() => {
     return ingredients.filter((i) => {
-      if (i.roughLevel === 'なし') return false;
       if (category !== 'すべて' && i.category !== category) return false;
       if (search.trim() && !i.name.includes(search.trim())) return false;
       return true;
@@ -143,7 +142,7 @@ export function Ingredients() {
               )}
             </div>
             <p className="text-muted mt-8" style={{ fontSize: 12 }}>
-              ※ 残量を「なし」にすると一覧から非表示になります。
+              ※ 数量は調理・食事の記録時に自動で減っていきます。＋/−でも調整できます。
             </p>
           </>
         ) : (

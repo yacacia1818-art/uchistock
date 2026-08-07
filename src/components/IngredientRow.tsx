@@ -1,11 +1,11 @@
 import { ShoppingCart } from 'lucide-react';
-import type { Ingredient, RoughLevel } from '../types';
+import type { Ingredient } from '../types';
 import { updateIngredient } from '../repositories/ingredientRepo';
 import { notifyDataChanged } from '../utils/bus';
 import { useToast } from './ToastProvider';
 import { toUserMessage } from '../utils/errors';
+import { formatQuantity } from '../utils/quantity';
 
-const ROUGH_ORDER: RoughLevel[] = ['なし', '少ない', '半分', '多い'];
 const CATEGORY_EMOJI: Record<string, string> = {
   野菜: '🥦',
   '肉・魚': '🍗',
@@ -22,24 +22,14 @@ interface IngredientRowProps {
 export function IngredientRow({ ingredient, onAddToMemo }: IngredientRowProps) {
   const { showToast } = useToast();
 
-  async function persist(patch: Partial<Ingredient>) {
+  async function stepQuantity(delta: number) {
+    const next = Math.max(0, Math.round((ingredient.quantity + delta) * 10) / 10);
     try {
-      await updateIngredient({ ...ingredient, ...patch });
+      await updateIngredient({ ...ingredient, quantity: next });
       notifyDataChanged();
     } catch (e) {
       showToast(toUserMessage(e, '更新に失敗しました'));
     }
-  }
-
-  function stepCount(delta: number) {
-    const next = Math.max(0, (ingredient.count ?? 0) + delta);
-    persist({ count: next });
-  }
-
-  function stepRough(delta: number) {
-    const idx = ROUGH_ORDER.indexOf(ingredient.roughLevel ?? '多い');
-    const nextIdx = Math.min(ROUGH_ORDER.length - 1, Math.max(0, idx + delta));
-    persist({ roughLevel: ROUGH_ORDER[nextIdx] });
   }
 
   return (
@@ -49,30 +39,15 @@ export function IngredientRow({ ingredient, onAddToMemo }: IngredientRowProps) {
         <div className="row-title">{ingredient.name}</div>
         <div className="row-sub">{ingredient.category}</div>
       </div>
-      {ingredient.trackType === 'count' ? (
-        <div className="stepper">
-          <button onClick={() => stepCount(-1)} aria-label="減らす">
-            −
-          </button>
-          <span>
-            {ingredient.count ?? 0}
-            {ingredient.unit ?? ''}
-          </span>
-          <button onClick={() => stepCount(1)} aria-label="増やす">
-            ＋
-          </button>
-        </div>
-      ) : (
-        <div className="stepper">
-          <button onClick={() => stepRough(-1)} aria-label="減らす">
-            −
-          </button>
-          <span style={{ minWidth: 40 }}>{ingredient.roughLevel ?? '多い'}</span>
-          <button onClick={() => stepRough(1)} aria-label="増やす">
-            ＋
-          </button>
-        </div>
-      )}
+      <div className="stepper">
+        <button onClick={() => stepQuantity(-1)} aria-label="減らす">
+          −
+        </button>
+        <span style={{ minWidth: 48 }}>{formatQuantity(ingredient.quantity, ingredient.unit)}</span>
+        <button onClick={() => stepQuantity(1)} aria-label="増やす">
+          ＋
+        </button>
+      </div>
       <button
         className="icon-btn"
         style={{ background: 'var(--color-primary)', color: '#fff', borderRadius: 10 }}

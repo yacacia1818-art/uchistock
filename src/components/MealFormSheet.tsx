@@ -1,12 +1,17 @@
 import { useEffect, useState } from 'react';
 import { Sun, Moon, Cookie, Utensils, Home as HomeIcon, Store } from 'lucide-react';
 import { BottomSheet } from './BottomSheet';
+import { IngredientUsageSelector } from './IngredientUsageSelector';
 import { listIngredients } from '../repositories/ingredientRepo';
+import { listAvailableCookedDishes } from '../repositories/cookedDishRepo';
 import { addMeal } from '../repositories/mealRepo';
+import { addDirectMeal, addCookedMeal, addFreeTextMeal } from '../services/mealService';
+import { cookAndEatNow } from '../services/cookingService';
 import { useToast } from './ToastProvider';
 import { notifyDataChanged } from '../utils/bus';
 import { toUserMessage } from '../utils/errors';
-import type { Ingredient, MealType } from '../types';
+import { formatQuantity } from '../utils/quantity';
+import type { CookedDish, Ingredient, IngredientUsage, MealHomeSource, MealType } from '../types';
 
 const MEAL_TYPES: { type: MealType; icon: typeof Sun }[] = [
   { type: '朝食', icon: Sun },
@@ -15,18 +20,35 @@ const MEAL_TYPES: { type: MealType; icon: typeof Sun }[] = [
   { type: '間食', icon: Cookie },
 ];
 
+const HOME_SOURCES: { source: MealHomeSource; label: string }[] = [
+  { source: 'direct', label: '在庫から' },
+  { source: 'cooked', label: '調理済み' },
+  { source: 'freeText', label: '自由入力' },
+  { source: 'cookNow', label: '今作って食べた' },
+];
+
 interface MealFormSheetProps {
   onClose: () => void;
   initialMealType?: MealType;
   initialDishName?: string;
+  initialHomeSource?: MealHomeSource;
 }
 
-export function MealFormSheet({ onClose, initialMealType, initialDishName }: MealFormSheetProps) {
+export function MealFormSheet({
+  onClose,
+  initialMealType,
+  initialDishName,
+  initialHomeSource,
+}: MealFormSheetProps) {
   const { showToast } = useToast();
   const [mealType, setMealType] = useState<MealType>(initialMealType ?? '朝食');
   const [mealKind, setMealKind] = useState<'home' | 'eatout'>('home');
+  const [homeSource, setHomeSource] = useState<MealHomeSource>(initialHomeSource ?? 'direct');
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [cookedDishes, setCookedDishes] = useState<CookedDish[]>([]);
+  const [directUsages, setDirectUsages] = useState<IngredientUsage[]>([]);
+  const [selectedDishId, setSelectedDishId] = useState<string>('');
+  const [freeTextRaw, setFreeTextRaw] = useState('');
   const [dishName, setDishName] = useState(initialDishName ?? '');
   const [memo, setMemo] = useState('');
   const [amount, setAmount] = useState('');
@@ -35,34 +57,85 @@ export function MealFormSheet({ onClose, initialMealType, initialDishName }: Mea
 
   useEffect(() => {
     listIngredients()
-      .then((list) => setIngredients(list.filter((i) => i.roughLevel !== 'なし')))
+      .then(setIngredients)
       .catch((e) => showToast(toUserMessage(e, '食材の読み込みに失敗しました')));
+    listAvailableCookedDishes()
+      .then(setCookedDishes)
+      .catch((e) => showToast(toUserMessage(e, '調理済み料理の読み込みに失敗しました')));
   }, [showToast]);
-
-  function toggleIngredient(id: string) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
 
   async function handleSave() {
     setSaving(true);
     try {
-      const ingredientNames = ingredients
-        .filter((i) => selectedIds.has(i.id))
-        .map((i) => i.name);
-      await addMeal({
-        mealType,
-        mealKind,
-        ingredientNames: mealKind === 'home' ? ingredientNames : undefined,
-        dishName: dishName.trim() || undefined,
-        memo: memo.trim() || undefined,
-        amount: mealKind === 'eatout' ? Number(amount) : undefined,
-        storeName: mealKind === 'eatout' ? storeName.trim() || undefined : undefined,
-      });
+      if (mealKind === 'eatout') {
+        const amountNum = Number(amount);
+        if (amount.trim() === '' || Number.isNaN(amountNum) || amountNum < 0) {
+          showToast('正しい金額を入力してください');
+          setSaving(false);
+          return;
+        }
+        await addMeal({
+          mealType,
+          mealKind: 'eatout',
+          amount: amountNum,
+          dishName: dishName.trim() || undefined,
+          storeName: storeName.trim() || undefined,
+          memo: memo.trim() || undefined,
+        });
+      } else if (homeSource === 'direct') {
+        await addDirectMeal({
+          mealType,
+          ingredientUsages: directUsages,
+          dishName: dishName.trim() || undefined,
+          memo: memo.trim() || undefined,
+        });
+      } else if (homeSource === 'cooked') {
+        if (!selectedDishId) {
+          showToast('調理済み料理を選択してください');
+          setSaving(false);
+          return;
+        }
+        const dish = cookedDishes.find((d) => d.id === selectedDishId);
+        await addCookedMeal({
+          mealType,
+          cookedDishId: selectedDishId,
+          dishName: dish?.name ?? '調理済み料理',
+          memo: memo.trim() || undefined,
+        });
+      } else if (homeSource === 'freeText') {
+        const items = freeTextRaw
+          .split('\n')
+          .map((s) => s.trim())
+          .filter(Boolean);
+        if (items.length === 0 && !dishName.trim()) {
+          showToast('食べたものを入力してください');
+          setSaving(false);
+          return;
+        }
+        await addFreeTextMeal({
+          mealType,
+          items: items.length > 0 ? items : [dishName.trim()],
+          dishName: dishName.trim() || undefined,
+          memo: memo.trim() || undefined,
+        });
+      } else if (homeSource === 'cookNow') {
+        if (!dishName.trim()) {
+          showToast('料理名を入力してください');
+          setSaving(false);
+          return;
+        }
+        if (directUsages.length === 0) {
+          showToast('使用した食材を選択してください');
+          setSaving(false);
+          return;
+        }
+        await cookAndEatNow({
+          name: dishName.trim(),
+          ingredientUsages: directUsages,
+          mealType,
+          memo: memo.trim() || undefined,
+        });
+      }
       notifyDataChanged();
       showToast('記録しました');
       onClose();
@@ -73,7 +146,12 @@ export function MealFormSheet({ onClose, initialMealType, initialDishName }: Mea
     }
   }
 
-  const canSave = mealKind === 'home' || (amount.trim() !== '' && !Number.isNaN(Number(amount)));
+  const canSave =
+    mealKind === 'eatout'
+      ? amount.trim() !== '' && !Number.isNaN(Number(amount))
+      : homeSource === 'cookNow'
+        ? dishName.trim() !== '' && directUsages.length > 0
+        : true;
 
   return (
     <BottomSheet title="食事を記録" onClose={onClose}>
@@ -106,25 +184,82 @@ export function MealFormSheet({ onClose, initialMealType, initialDishName }: Mea
       </div>
 
       {mealKind === 'home' ? (
-        <div className="field">
-          <label>食べたものを選択（在庫から）</label>
-          {ingredients.length === 0 ? (
-            <p className="text-muted">在庫がまだ登録されていません</p>
-          ) : (
-            <div className="card" style={{ padding: '4px 12px' }}>
-              {ingredients.map((i) => (
-                <label className="checkbox-row" key={i.id}>
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.has(i.id)}
-                    onChange={() => toggleIngredient(i.id)}
-                  />
-                  <span style={{ flex: 1 }}>{i.name}</span>
-                </label>
-              ))}
+        <>
+          <div className="chip-row">
+            {HOME_SOURCES.map(({ source, label }) => (
+              <button
+                key={source}
+                className={`chip${homeSource === source ? ' active' : ''}`}
+                onClick={() => setHomeSource(source)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {(homeSource === 'direct' || homeSource === 'cookNow') && (
+            <div className="field">
+              <label>食べたものを選択（在庫から）</label>
+              <IngredientUsageSelector
+                ingredients={ingredients}
+                value={directUsages}
+                onChange={setDirectUsages}
+              />
             </div>
           )}
-        </div>
+
+          {homeSource === 'cooked' && (
+            <div className="field">
+              <label>調理済み料理から選ぶ</label>
+              {cookedDishes.length === 0 ? (
+                <p className="text-muted">調理済み料理がまだありません</p>
+              ) : (
+                <div className="card" style={{ padding: '4px 12px' }}>
+                  {cookedDishes.map((dish) => (
+                    <label className="checkbox-row" key={dish.id}>
+                      <input
+                        type="radio"
+                        name="cookedDish"
+                        checked={selectedDishId === dish.id}
+                        onChange={() => setSelectedDishId(dish.id)}
+                      />
+                      <span style={{ flex: 1 }}>{dish.name}</span>
+                      {dish.servingsRemaining !== undefined && (
+                        <span className="text-muted" style={{ fontSize: 12 }}>
+                          残り{dish.servingsRemaining}食
+                        </span>
+                      )}
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {homeSource === 'freeText' && (
+            <div className="field">
+              <label>食べたものを自由入力（改行で複数）</label>
+              <textarea
+                className="textarea"
+                value={freeTextRaw}
+                onChange={(e) => setFreeTextRaw(e.target.value)}
+                placeholder={'例：\n食パン\nコーヒー'}
+              />
+            </div>
+          )}
+
+          {homeSource === 'cookNow' && (
+            <div className="field">
+              <label>料理名（必須）</label>
+              <input
+                className="input"
+                value={dishName}
+                onChange={(e) => setDishName(e.target.value)}
+                placeholder="例：鶏むね肉の照り焼き"
+              />
+            </div>
+          )}
+        </>
       ) : (
         <div className="field">
           <label>金額（必須）</label>
@@ -139,27 +274,42 @@ export function MealFormSheet({ onClose, initialMealType, initialDishName }: Mea
         </div>
       )}
 
-      <div className="field">
-        <label>
-          <Utensils size={12} style={{ verticalAlign: '-2px' }} /> 料理名（任意）
-        </label>
-        <input
-          className="input"
-          value={dishName}
-          onChange={(e) => setDishName(e.target.value)}
-          placeholder="例：鶏むね肉の照り焼き"
-        />
-      </div>
-
-      {mealKind === 'eatout' && (
+      {mealKind === 'home' && homeSource !== 'cookNow' && (
         <div className="field">
-          <label>店名（任意）</label>
+          <label>
+            <Utensils size={12} style={{ verticalAlign: '-2px' }} /> 料理名（任意）
+          </label>
           <input
             className="input"
-            value={storeName}
-            onChange={(e) => setStoreName(e.target.value)}
+            value={dishName}
+            onChange={(e) => setDishName(e.target.value)}
+            placeholder="例：鶏むね肉の照り焼き"
           />
         </div>
+      )}
+
+      {mealKind === 'eatout' && (
+        <>
+          <div className="field">
+            <label>
+              <Utensils size={12} style={{ verticalAlign: '-2px' }} /> 料理名（任意）
+            </label>
+            <input
+              className="input"
+              value={dishName}
+              onChange={(e) => setDishName(e.target.value)}
+              placeholder="例：ラーメン"
+            />
+          </div>
+          <div className="field">
+            <label>店名（任意）</label>
+            <input
+              className="input"
+              value={storeName}
+              onChange={(e) => setStoreName(e.target.value)}
+            />
+          </div>
+        </>
       )}
 
       <div className="field">
@@ -171,6 +321,14 @@ export function MealFormSheet({ onClose, initialMealType, initialDishName }: Mea
           placeholder="例：料理名や量など"
         />
       </div>
+
+      {directUsages.length > 0 && (homeSource === 'direct' || homeSource === 'cookNow') && mealKind === 'home' && (
+        <p className="text-muted mb-16" style={{ fontSize: 12 }}>
+          {directUsages
+            .map((u) => `${u.ingredientName} ${formatQuantity(u.usage.value, u.unit)}使用`)
+            .join(' / ')}
+        </p>
+      )}
 
       <button className="btn btn-primary" onClick={handleSave} disabled={saving || !canSave}>
         保存

@@ -3,6 +3,7 @@ import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-reac
 import { Header } from '../components/Header';
 import { listMealsByMonth } from '../repositories/mealRepo';
 import { listPurchasesByMonth } from '../repositories/purchaseRepo';
+import { listCookedDishesByMonth } from '../repositories/cookedDishRepo';
 import { getSettings } from '../repositories/settingsRepo';
 import {
   addMonths,
@@ -15,7 +16,9 @@ import {
 import { useDataVersion } from '../hooks/useDataVersion';
 import { useToast } from '../components/ToastProvider';
 import { toUserMessage } from '../utils/errors';
-import type { Meal, MealType, Purchase } from '../types';
+import { mealContentLabel } from '../utils/mealDisplay';
+import { formatQuantity } from '../utils/quantity';
+import type { CookedDish, Meal, MealType, Purchase } from '../types';
 
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 const MEAL_ORDER: MealType[] = ['朝食', '昼食', '夕食', '間食'];
@@ -26,14 +29,16 @@ export function CalendarPage() {
   const [ym, setYm] = useState(currentYearMonth());
   const [meals, setMeals] = useState<Meal[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [cookedDishes, setCookedDishes] = useState<CookedDish[]>([]);
   const [budget, setBudget] = useState(15000);
   const [selectedDate, setSelectedDate] = useState<string>(todayDateStr());
 
   useEffect(() => {
-    Promise.all([listMealsByMonth(ym), listPurchasesByMonth(ym), getSettings()])
-      .then(([m, p, s]) => {
+    Promise.all([listMealsByMonth(ym), listPurchasesByMonth(ym), listCookedDishesByMonth(ym), getSettings()])
+      .then(([m, p, c, s]) => {
         setMeals(m);
         setPurchases(p);
+        setCookedDishes(c);
         setBudget(s.monthlyBudget);
       })
       .catch((e) => showToast(toUserMessage(e, 'データの読み込みに失敗しました')));
@@ -52,8 +57,9 @@ export function CalendarPage() {
     const set = new Set<string>();
     meals.forEach((m) => set.add(m.date));
     purchases.forEach((p) => set.add(p.date));
+    cookedDishes.forEach((c) => set.add(c.date));
     return set;
-  }, [meals, purchases]);
+  }, [meals, purchases, cookedDishes]);
 
   const cells = useMemo(() => {
     const [y, m] = ym.split('-').map(Number);
@@ -73,13 +79,7 @@ export function CalendarPage() {
     .filter((m) => m.date === selectedDate)
     .sort((a, b) => MEAL_ORDER.indexOf(a.mealType) - MEAL_ORDER.indexOf(b.mealType));
   const dayPurchases = purchases.filter((p) => p.date === selectedDate);
-
-  function mealText(m: Meal): string {
-    if (m.dishName) return m.dishName;
-    if (m.mealKind === 'home' && m.ingredientNames?.length) return m.ingredientNames.join('・');
-    if (m.mealKind === 'eatout') return '外食';
-    return '記録あり';
-  }
+  const dayCooking = cookedDishes.filter((c) => c.date === selectedDate);
 
   return (
     <>
@@ -133,14 +133,27 @@ export function CalendarPage() {
 
         <div className="card">
           <div className="section-title">{formatDateLabel(selectedDate)}の記録</div>
-          {dayMeals.length === 0 && dayPurchases.length === 0 ? (
+          {dayMeals.length === 0 && dayPurchases.length === 0 && dayCooking.length === 0 ? (
             <div className="empty-state">記録がありません</div>
           ) : (
             <>
               {dayMeals.map((m) => (
                 <div className="link-row" key={m.id}>
                   <span style={{ color: 'var(--color-primary-dark)', fontWeight: 700 }}>{m.mealType}</span>
-                  <span>{mealText(m)}</span>
+                  <span>
+                    {mealContentLabel(m)}
+                    {m.mealKind === 'eatout' && m.amount !== undefined && ` ・ ¥${m.amount.toLocaleString()}`}
+                  </span>
+                </div>
+              ))}
+              {dayCooking.map((c) => (
+                <div className="link-row" key={c.id}>
+                  <span style={{ color: 'var(--color-primary-dark)', fontWeight: 700 }}>調理</span>
+                  <span>
+                    {c.name}
+                    {c.ingredientUsages.length > 0 &&
+                      `（${c.ingredientUsages.map((u) => `${u.ingredientName} ${formatQuantity(u.usage.value, u.unit)}`).join('・')}）`}
+                  </span>
                 </div>
               ))}
               {dayPurchases.map((p) => (

@@ -107,6 +107,13 @@ button {
   font-weight: 700;
 }
 
+.header-subtitle {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  margin: 2px 0 0 2px;
+}
+
 .header-actions {
   display: flex;
   align-items: center;

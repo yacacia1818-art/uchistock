@@ -50,3 +50,16 @@ export function remainingDaysInMonth(d: Date = new Date()): number {
   const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
   return last - d.getDate() + 1;
 }
+
+// 月間カレンダー描画用のセル一覧（先頭の空白セル＋各日付）。曜日の位置合わせに使う
+export function cellsOfMonth(ym: string): { date: string | null }[] {
+  const [y, m] = ym.split('-').map(Number);
+  const firstDow = new Date(y, m - 1, 1).getDay();
+  const total = daysInMonth(ym);
+  const result: { date: string | null }[] = [];
+  for (let i = 0; i < firstDow; i++) result.push({ date: null });
+  for (let d = 1; d <= total; d++) {
+    result.push({ date: `${ym}-${String(d).padStart(2, '0')}` });
+  }
+  return result;
+}

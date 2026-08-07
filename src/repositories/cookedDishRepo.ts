@@ -69,3 +69,32 @@ export async function consumeCookedDishServing(id: string): Promise<void> {
     throw new AppError('調理済み料理の更新に失敗しました');
   }
 }
+
+// 食事記録の編集で「調理済みから選ぶ」対象が変わった場合など、消費した1食分を残数へ戻す（作った量を超えない）
+export async function restoreCookedDishServing(id: string): Promise<void> {
+  try {
+    const db = await getDB();
+    const dish = await db.get('cookedDishes', id);
+    if (!dish || dish.servingsRemaining === undefined) return;
+    const cap = dish.servings ?? dish.servingsRemaining + 1;
+    const next = Math.min(cap, dish.servingsRemaining + 1);
+    await db.put('cookedDishes', { ...dish, servingsRemaining: next });
+  } catch {
+    throw new AppError('調理済み料理の更新に失敗しました');
+  }
+}
+
+// 調理記録の編集：在庫等の副作用は呼び出し側（編集サービス）で差分計算して行う
+export async function updateCookedDish(dish: CookedDish): Promise<CookedDish> {
+  if (!dish.name.trim()) {
+    throw new AppError('料理名を入力してください');
+  }
+  try {
+    const db = await getDB();
+    await db.put('cookedDishes', dish);
+    return dish;
+  } catch (e) {
+    if (e instanceof AppError) throw e;
+    throw new AppError('調理記録の更新に失敗しました');
+  }
+}

@@ -6,6 +6,8 @@ import { MealFormSheet } from '../components/MealFormSheet';
 import { CookingFormSheet } from '../components/CookingFormSheet';
 import { PurchaseFormSheet } from '../components/PurchaseFormSheet';
 import { PurchaseEditSheet } from '../components/PurchaseEditSheet';
+import { MealDetailSheet } from '../components/MealDetailSheet';
+import { CookingDetailSheet } from '../components/CookingDetailSheet';
 import { ReceiptViewer } from '../components/ReceiptViewer';
 import { RecordTypeChooserSheet, type RecordChoice } from '../components/RecordTypeChooserSheet';
 import { listMeals } from '../repositories/mealRepo';
@@ -36,6 +38,10 @@ export function Records() {
   const [showPurchaseForm, setShowPurchaseForm] = useState(false);
   const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null);
   const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
+  const [selectedMeal, setSelectedMeal] = useState<Meal | null>(null);
+  const [editingMeal, setEditingMeal] = useState<Meal | null>(null);
+  const [selectedDish, setSelectedDish] = useState<CookedDish | null>(null);
+  const [editingDish, setEditingDish] = useState<CookedDish | null>(null);
   const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
 
   useEffect(() => {
@@ -88,7 +94,12 @@ export function Records() {
                 const Icon = MEAL_ICON[m.mealType];
                 const sub = mealSubLabel(m);
                 return (
-                  <div className="list-row" key={m.id}>
+                  <button
+                    key={m.id}
+                    className="list-row"
+                    style={{ width: '100%', border: 'none', background: 'none', textAlign: 'left', font: 'inherit' }}
+                    onClick={() => setSelectedMeal(m)}
+                  >
                     <div className="row-emoji">
                       <Icon size={18} />
                     </div>
@@ -99,7 +110,7 @@ export function Records() {
                         {sub && ` ・ ${sub}`}
                       </div>
                     </div>
-                  </div>
+                  </button>
                 );
               })
             )}
@@ -112,7 +123,19 @@ export function Records() {
               <div className="empty-state">まだ調理記録がありません</div>
             ) : (
               cookedDishes.map((dish) => (
-                <div className="list-row" key={dish.id} style={{ alignItems: 'flex-start' }}>
+                <button
+                  key={dish.id}
+                  className="list-row"
+                  style={{
+                    width: '100%',
+                    border: 'none',
+                    background: 'none',
+                    textAlign: 'left',
+                    font: 'inherit',
+                    alignItems: 'flex-start',
+                  }}
+                  onClick={() => setSelectedDish(dish)}
+                >
                   <div className="row-emoji">🍳</div>
                   <div className="row-main">
                     <div className="row-title">{dish.name}</div>
@@ -134,7 +157,7 @@ export function Records() {
                       </div>
                     )}
                   </div>
-                </div>
+                </button>
               ))
             )}
           </div>
@@ -174,6 +197,34 @@ export function Records() {
       {showMealForm && <MealFormSheet onClose={() => setShowMealForm(false)} />}
       {showCookingForm && <CookingFormSheet onClose={() => setShowCookingForm(false)} />}
       {showPurchaseForm && <PurchaseFormSheet onClose={() => setShowPurchaseForm(false)} />}
+
+      {selectedMeal && (
+        <MealDetailSheet
+          meal={selectedMeal}
+          onClose={() => setSelectedMeal(null)}
+          onEdit={() => {
+            setEditingMeal(selectedMeal);
+            setSelectedMeal(null);
+          }}
+        />
+      )}
+      {editingMeal && (
+        <MealFormSheet key={editingMeal.id} editingMeal={editingMeal} onClose={() => setEditingMeal(null)} />
+      )}
+
+      {selectedDish && (
+        <CookingDetailSheet
+          dish={selectedDish}
+          onClose={() => setSelectedDish(null)}
+          onEdit={() => {
+            setEditingDish(selectedDish);
+            setSelectedDish(null);
+          }}
+        />
+      )}
+      {editingDish && (
+        <CookingFormSheet key={editingDish.id} editingDish={editingDish} onClose={() => setEditingDish(null)} />
+      )}
 
       {selectedPurchase && (
         <BottomSheet

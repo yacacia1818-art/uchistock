@@ -67,6 +67,23 @@ export async function addMeal(
   }
 }
 
+// 既存の食事記録を更新する（在庫等の副作用は呼び出し側=編集サービスで差分計算して行う）
+export async function updateMeal(meal: Meal): Promise<Meal> {
+  if (meal.mealKind === 'eatout') {
+    if (meal.amount === undefined || !Number.isFinite(meal.amount) || meal.amount < 0) {
+      throw new AppError('金額には0以上の数値を入力してください');
+    }
+  }
+  try {
+    const db = await getDB();
+    await db.put('meals', meal);
+    return meal;
+  } catch (e) {
+    if (e instanceof AppError) throw e;
+    throw new AppError('食事記録の更新に失敗しました');
+  }
+}
+
 export async function deleteMeal(id: string): Promise<void> {
   try {
     const db = await getDB();

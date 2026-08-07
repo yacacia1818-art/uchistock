@@ -3,28 +3,42 @@ import { BottomSheet } from './BottomSheet';
 import { IngredientUsageSelector } from './IngredientUsageSelector';
 import { listIngredients } from '../repositories/ingredientRepo';
 import { cookDish } from '../services/cookingService';
+import { updateCookingWithInventory } from '../services/cookingEditService';
+import { buildEditableIngredientPool } from '../services/usageDiffService';
 import { useToast } from './ToastProvider';
 import { notifyDataChanged } from '../utils/bus';
 import { toUserMessage } from '../utils/errors';
-import type { Ingredient, IngredientUsage } from '../types';
+import { todayDateStr } from '../utils/date';
+import type { CookedDish, Ingredient, IngredientUsage } from '../types';
 
 interface CookingFormSheetProps {
   onClose: () => void;
+  // 指定時は新規登録ではなく既存記録の編集モードで開く
+  editingDish?: CookedDish;
 }
 
-export function CookingFormSheet({ onClose }: CookingFormSheetProps) {
+export function CookingFormSheet({ onClose, editingDish }: CookingFormSheetProps) {
   const { showToast } = useToast();
+  const isEdit = !!editingDish;
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
-  const [name, setName] = useState('');
-  const [usages, setUsages] = useState<IngredientUsage[]>([]);
-  const [servings, setServings] = useState<string>('');
-  const [memo, setMemo] = useState('');
+  const [date, setDate] = useState(editingDish?.date ?? todayDateStr());
+  const [name, setName] = useState(editingDish?.name ?? '');
+  const [usages, setUsages] = useState<IngredientUsage[]>(editingDish?.ingredientUsages ?? []);
+  const [servings, setServings] = useState<string>(
+    editingDish?.servings !== undefined ? String(editingDish.servings) : ''
+  );
+  const [memo, setMemo] = useState(editingDish?.memo ?? '');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     listIngredients()
-      .then(setIngredients)
+      .then((list) =>
+        setIngredients(
+          editingDish ? buildEditableIngredientPool(list, editingDish.ingredientUsages) : list
+        )
+      )
       .catch((e) => showToast(toUserMessage(e, '食材の読み込みに失敗しました')));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showToast]);
 
   async function handleSave() {
@@ -43,6 +57,19 @@ export function CookingFormSheet({ onClose }: CookingFormSheetProps) {
     }
     setSaving(true);
     try {
+      if (isEdit && editingDish) {
+        await updateCookingWithInventory(editingDish, {
+          date,
+          name: name.trim(),
+          usages,
+          servings: servingsNum,
+          memo,
+        });
+        notifyDataChanged();
+        showToast('変更しました');
+        onClose();
+        return;
+      }
       await cookDish({
         name: name.trim(),
         ingredientUsages: usages,
@@ -60,7 +87,14 @@ export function CookingFormSheet({ onClose }: CookingFormSheetProps) {
   }
 
   return (
-    <BottomSheet title="調理を記録" onClose={onClose}>
+    <BottomSheet title={isEdit ? '調理記録を編集' : '調理を記録'} onClose={onClose}>
+      {isEdit && (
+        <div className="field">
+          <label>日付</label>
+          <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        </div>
+      )}
+
       <div className="field">
         <label>料理名（必須）</label>
         <input
@@ -68,7 +102,7 @@ export function CookingFormSheet({ onClose }: CookingFormSheetProps) {
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="例：豚の生姜焼き"
-          autoFocus
+          autoFocus={!isEdit}
         />
       </div>
 
@@ -95,7 +129,7 @@ export function CookingFormSheet({ onClose }: CookingFormSheetProps) {
       </div>
 
       <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-        保存
+        {isEdit ? '変更を保存' : '保存'}
       </button>
     </BottomSheet>
   );

@@ -3,15 +3,18 @@ import { Sun, Moon, Cookie, Utensils, Home as HomeIcon, Store } from 'lucide-rea
 import { BottomSheet } from './BottomSheet';
 import { IngredientUsageSelector } from './IngredientUsageSelector';
 import { listIngredients } from '../repositories/ingredientRepo';
-import { listAvailableCookedDishes } from '../repositories/cookedDishRepo';
+import { listAvailableCookedDishes, getCookedDish } from '../repositories/cookedDishRepo';
 import { addMeal } from '../repositories/mealRepo';
 import { addDirectMeal, addCookedMeal, addFreeTextMeal } from '../services/mealService';
 import { cookAndEatNow } from '../services/cookingService';
+import { updateMealWithInventory } from '../services/mealEditService';
+import { buildEditableIngredientPool } from '../services/usageDiffService';
 import { useToast } from './ToastProvider';
 import { notifyDataChanged } from '../utils/bus';
 import { toUserMessage } from '../utils/errors';
 import { formatQuantity } from '../utils/quantity';
-import type { CookedDish, Ingredient, IngredientUsage, MealHomeSource, MealType } from '../types';
+import { todayDateStr } from '../utils/date';
+import type { CookedDish, Ingredient, IngredientUsage, Meal, MealHomeSource, MealType } from '../types';
 
 const MEAL_TYPES: { type: MealType; icon: typeof Sun }[] = [
   { type: '朝食', icon: Sun },
@@ -32,6 +35,8 @@ interface MealFormSheetProps {
   initialMealType?: MealType;
   initialDishName?: string;
   initialHomeSource?: MealHomeSource;
+  // 指定時は新規登録ではなく既存記録の編集モードで開く
+  editingMeal?: Meal;
 }
 
 export function MealFormSheet({
@@ -39,34 +44,92 @@ export function MealFormSheet({
   initialMealType,
   initialDishName,
   initialHomeSource,
+  editingMeal,
 }: MealFormSheetProps) {
   const { showToast } = useToast();
-  const [mealType, setMealType] = useState<MealType>(initialMealType ?? '朝食');
-  const [mealKind, setMealKind] = useState<'home' | 'eatout'>('home');
-  const [homeSource, setHomeSource] = useState<MealHomeSource>(initialHomeSource ?? 'direct');
+  const isEdit = !!editingMeal;
+  const [date, setDate] = useState(editingMeal?.date ?? todayDateStr());
+  const [mealType, setMealType] = useState<MealType>(editingMeal?.mealType ?? initialMealType ?? '朝食');
+  const [mealKind, setMealKind] = useState<'home' | 'eatout'>(editingMeal?.mealKind ?? 'home');
+  const [homeSource, setHomeSource] = useState<MealHomeSource>(
+    editingMeal?.homeSource ?? initialHomeSource ?? 'direct'
+  );
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [cookedDishes, setCookedDishes] = useState<CookedDish[]>([]);
-  const [directUsages, setDirectUsages] = useState<IngredientUsage[]>([]);
-  const [selectedDishId, setSelectedDishId] = useState<string>('');
-  const [freeTextRaw, setFreeTextRaw] = useState('');
-  const [dishName, setDishName] = useState(initialDishName ?? '');
-  const [memo, setMemo] = useState('');
-  const [amount, setAmount] = useState('');
-  const [storeName, setStoreName] = useState('');
+  const [directUsages, setDirectUsages] = useState<IngredientUsage[]>(editingMeal?.ingredientUsages ?? []);
+  const [selectedDishId, setSelectedDishId] = useState<string>(
+    editingMeal?.homeSource === 'cooked' ? editingMeal.cookedDishId ?? '' : ''
+  );
+  const [freeTextRaw, setFreeTextRaw] = useState((editingMeal?.freeTextItems ?? []).join('\n'));
+  const [dishName, setDishName] = useState(editingMeal?.dishName ?? initialDishName ?? '');
+  const [memo, setMemo] = useState(editingMeal?.memo ?? '');
+  const [amount, setAmount] = useState(editingMeal?.amount !== undefined ? String(editingMeal.amount) : '');
+  const [storeName, setStoreName] = useState(editingMeal?.storeName ?? '');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     listIngredients()
-      .then(setIngredients)
+      .then((list) =>
+        setIngredients(
+          editingMeal ? buildEditableIngredientPool(list, editingMeal.ingredientUsages ?? []) : list
+        )
+      )
       .catch((e) => showToast(toUserMessage(e, '食材の読み込みに失敗しました')));
     listAvailableCookedDishes()
-      .then(setCookedDishes)
+      .then(async (list) => {
+        if (
+          editingMeal?.homeSource === 'cooked' &&
+          editingMeal.cookedDishId &&
+          !list.some((d) => d.id === editingMeal.cookedDishId)
+        ) {
+          const current = await getCookedDish(editingMeal.cookedDishId);
+          if (current) list = [current, ...list];
+        }
+        setCookedDishes(list);
+      })
       .catch((e) => showToast(toUserMessage(e, '調理済み料理の読み込みに失敗しました')));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showToast]);
+
+  // 編集時は「今作って食べた」を新たに選ぶことはできない（元々cookNowの記録のみそのまま編集可能）
+  const homeSourceOptions =
+    isEdit && editingMeal?.homeSource !== 'cookNow'
+      ? HOME_SOURCES.filter((s) => s.source !== 'cookNow')
+      : HOME_SOURCES;
 
   async function handleSave() {
     setSaving(true);
     try {
+      if (isEdit && editingMeal) {
+        const amountNum = mealKind === 'eatout' ? Number(amount) : undefined;
+        if (mealKind === 'eatout' && (amount.trim() === '' || Number.isNaN(amountNum))) {
+          showToast('正しい金額を入力してください');
+          setSaving(false);
+          return;
+        }
+        const items = freeTextRaw
+          .split('\n')
+          .map((s) => s.trim())
+          .filter(Boolean);
+        await updateMealWithInventory(editingMeal, {
+          date,
+          mealType,
+          mealKind,
+          homeSource,
+          directUsages,
+          selectedDishId,
+          freeTextItems: items.length > 0 ? items : dishName.trim() ? [dishName.trim()] : [],
+          dishName,
+          memo,
+          amount: amountNum,
+          storeName,
+        });
+        notifyDataChanged();
+        showToast('変更しました');
+        onClose();
+        return;
+      }
+
       if (mealKind === 'eatout') {
         const amountNum = Number(amount);
         if (amount.trim() === '' || Number.isNaN(amountNum) || amountNum < 0) {
@@ -154,7 +217,14 @@ export function MealFormSheet({
         : true;
 
   return (
-    <BottomSheet title="食事を記録" onClose={onClose}>
+    <BottomSheet title={isEdit ? '食事記録を編集' : '食事を記録'} onClose={onClose}>
+      {isEdit && (
+        <div className="field">
+          <label>日付</label>
+          <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        </div>
+      )}
+
       <div className="meal-type-grid">
         {MEAL_TYPES.map(({ type, icon: Icon }) => (
           <button
@@ -186,7 +256,7 @@ export function MealFormSheet({
       {mealKind === 'home' ? (
         <>
           <div className="chip-row">
-            {HOME_SOURCES.map(({ source, label }) => (
+            {homeSourceOptions.map(({ source, label }) => (
               <button
                 key={source}
                 className={`chip${homeSource === source ? ' active' : ''}`}
@@ -274,7 +344,7 @@ export function MealFormSheet({
         </div>
       )}
 
-      {mealKind === 'home' && homeSource !== 'cookNow' && (
+      {mealKind === 'home' && homeSource !== 'cookNow' && homeSource !== 'cooked' && (
         <div className="field">
           <label>
             <Utensils size={12} style={{ verticalAlign: '-2px' }} /> 料理名（任意）
@@ -331,7 +401,7 @@ export function MealFormSheet({
       )}
 
       <button className="btn btn-primary" onClick={handleSave} disabled={saving || !canSave}>
-        保存
+        {isEdit ? '変更を保存' : '保存'}
       </button>
     </BottomSheet>
   );

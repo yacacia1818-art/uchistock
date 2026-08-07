@@ -157,3 +157,19 @@ export async function decrementIngredientQuantity(id: string, amount: number): P
     throw new AppError('食材在庫の更新に失敗しました');
   }
 }
+
+// 記録編集による差分返却など、期限情報は変更せず数量だけ増やす。対象食材が削除済みの場合は何もしない
+export async function incrementIngredientQuantity(id: string, amount: number): Promise<Ingredient | undefined> {
+  try {
+    const db = await getDB();
+    const ing = await db.get('ingredients', id);
+    if (!ing) return undefined;
+    const current = normalize(ing);
+    const nextQuantity = snapQuantity(current.quantity + amount);
+    const updated: Ingredient = { ...current, quantity: nextQuantity, updatedAt: nowIsoStr() };
+    await db.put('ingredients', updated);
+    return updated;
+  } catch {
+    throw new AppError('食材在庫の更新に失敗しました');
+  }
+}

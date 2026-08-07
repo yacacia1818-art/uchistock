@@ -1,56 +1,45 @@
 import { useRef, useState } from 'react';
 import { Camera, ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react';
 import { BottomSheet } from './BottomSheet';
-import { recordPurchase } from '../services/purchaseService';
+import { updatePurchaseWithInventory, type EditableItemRow } from '../services/purchaseEditService';
 import { useToast } from './ToastProvider';
 import { notifyDataChanged } from '../utils/bus';
 import { toUserMessage } from '../utils/errors';
-import { parseMemoQuantity } from '../utils/quantity';
 import { generateId } from '../utils/id';
 import { UNIT_OPTIONS } from '../types';
-import type { ShoppingCategory, ShoppingMemoItem } from '../types';
+import type { Purchase, ShoppingCategory } from '../types';
 
-interface PurchaseFormSheetProps {
+interface PurchaseEditSheetProps {
+  purchase: Purchase;
   onClose: () => void;
-  carriedItems?: ShoppingMemoItem[];
+  onSaved: (purchase: Purchase) => void;
 }
 
-interface PurchaseRow {
-  id: string;
-  name: string;
-  category: ShoppingCategory;
-  quantity: string;
-  unit: string;
-  price: string;
-  addToInventory: boolean;
-  convertUnit: boolean;
-  invQuantity: string;
-  invUnit: string;
-  expiryDate: string;
+function buildRowsFromPurchase(purchase: Purchase): EditableItemRow[] {
+  const additions = purchase.inventoryAdditions ?? [];
+  const priorByItemId = new Map(additions.filter((a) => a.itemId).map((a) => [a.itemId!, a]));
+  // v1.2以前のitemId未付与データ向けフォールバック（商品名で対応付け）
+  const priorByName = new Map(additions.map((a) => [a.name, a]));
+  return (purchase.items ?? []).map((item) => {
+    const id = item.id ?? generateId();
+    const prior = (item.id && priorByItemId.get(item.id)) || priorByName.get(item.name);
+    return {
+      id,
+      name: item.name,
+      category: item.category ?? '食品',
+      quantity: item.quantity !== undefined ? String(item.quantity) : '',
+      unit: item.unit ?? '個',
+      price: item.price !== undefined ? String(item.price) : '',
+      expiryDate: item.expiryDate ?? '',
+      addToInventory: !!prior,
+      convertUnit: !!prior && prior.unit !== (item.unit ?? '個'),
+      invQuantity: prior ? String(prior.quantity) : item.quantity !== undefined ? String(item.quantity) : '',
+      invUnit: prior ? prior.unit : item.unit ?? '個',
+    };
+  });
 }
 
-function buildRowFromMemoItem(item: ShoppingMemoItem): PurchaseRow {
-  const category = item.category ?? '食品';
-  const { quantity, unit } =
-    item.quantityValue && item.unit
-      ? { quantity: item.quantityValue, unit: item.unit }
-      : parseMemoQuantity(item.quantity);
-  return {
-    id: item.id,
-    name: item.name,
-    category,
-    quantity: String(quantity),
-    unit,
-    price: '',
-    addToInventory: category === '食品',
-    convertUnit: false,
-    invQuantity: String(quantity),
-    invUnit: unit,
-    expiryDate: '',
-  };
-}
-
-function blankRow(): PurchaseRow {
+function blankRow(): EditableItemRow {
   return {
     id: generateId(),
     name: '',
@@ -58,39 +47,40 @@ function blankRow(): PurchaseRow {
     quantity: '',
     unit: '個',
     price: '',
+    expiryDate: '',
     addToInventory: true,
     convertUnit: false,
     invQuantity: '',
     invUnit: '個',
-    expiryDate: '',
   };
 }
 
-export function PurchaseFormSheet({ onClose, carriedItems }: PurchaseFormSheetProps) {
+export function PurchaseEditSheet({ purchase, onClose, onSaved }: PurchaseEditSheetProps) {
   const { showToast } = useToast();
-  const [totalAmount, setTotalAmount] = useState('');
-  const [storeName, setStoreName] = useState('');
-  const [rows, setRows] = useState<PurchaseRow[]>((carriedItems ?? []).map(buildRowFromMemoItem));
+  const [date, setDate] = useState(purchase.date);
+  const [totalAmount, setTotalAmount] = useState(String(purchase.totalAmount));
+  const [storeName, setStoreName] = useState(purchase.storeName ?? '');
+  const [rows, setRows] = useState<EditableItemRow[]>(buildRowsFromPurchase(purchase));
+  const [showAmountSplit, setShowAmountSplit] = useState(purchase.foodAmount !== undefined);
+  const [foodAmount, setFoodAmount] = useState(purchase.foodAmount !== undefined ? String(purchase.foodAmount) : '');
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [showAmountSplit, setShowAmountSplit] = useState(false);
-  const [foodAmount, setFoodAmount] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function updateRow(id: string, patch: Partial<EditableItemRow>) {
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  }
+
+  function removeRow(id: string) {
+    setRows((prev) => prev.filter((r) => r.id !== id));
+  }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setReceiptFile(file);
     setReceiptPreview(URL.createObjectURL(file));
-  }
-
-  function updateRow(id: string, patch: Partial<PurchaseRow>) {
-    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
-  }
-
-  function removeRow(id: string) {
-    setRows((prev) => prev.filter((r) => r.id !== id));
   }
 
   async function handleSave() {
@@ -109,48 +99,22 @@ export function PurchaseFormSheet({ onClose, carriedItems }: PurchaseFormSheetPr
     }
     setSaving(true);
     try {
-      const validRows = rows.filter((r) => r.name.trim());
-
-      const items = validRows.map((r) => {
-        const qty = r.quantity.trim() !== '' ? Number(r.quantity) : undefined;
-        return {
-          id: r.id,
-          name: r.name.trim(),
-          quantity: qty !== undefined && Number.isFinite(qty) && qty > 0 ? qty : undefined,
-          unit: qty !== undefined && Number.isFinite(qty) && qty > 0 ? r.unit : undefined,
-          category: r.category,
-          price: r.price.trim() !== '' && Number.isFinite(Number(r.price)) ? Number(r.price) : undefined,
-          expiryDate: r.category === '食品' && r.expiryDate ? r.expiryDate : undefined,
-        };
-      });
-
-      const inventoryAdditions = validRows
-        .filter((r) => r.addToInventory)
-        .map((r) => {
-          const invQty = r.convertUnit ? r.invQuantity : r.quantity;
-          const invUnit = r.convertUnit ? r.invUnit : r.unit;
-          const qty = invQty.trim() !== '' ? Number(invQty) : 1;
-          return {
-            itemId: r.id,
-            name: r.name.trim(),
-            unit: invUnit || '個',
-            quantity: Number.isFinite(qty) && qty > 0 ? qty : 1,
-            expiryDate: r.category === '食品' ? r.expiryDate || undefined : undefined,
-          };
-        });
-
-      await recordPurchase({
+      const { purchase: updated, skippedReductions } = await updatePurchaseWithInventory({
+        purchase,
+        date,
+        storeName: storeName.trim() || undefined,
         totalAmount: amountNum,
         foodAmount: foodAmountNum,
-        storeName: storeName.trim() || undefined,
-        items: items.length > 0 ? items : undefined,
+        rows,
         receiptFile,
-        carriedMemoIds: carriedItems?.map((i) => i.id),
-        inventoryAdditions,
       });
-
       notifyDataChanged();
-      showToast('記録しました');
+      if (skippedReductions.length > 0) {
+        showToast(`保存しました（在庫は自動変更しませんでした：${skippedReductions.join('・')}）`);
+      } else {
+        showToast('購入記録を更新しました');
+      }
+      onSaved(updated);
       onClose();
     } catch (e) {
       showToast(toUserMessage(e, '保存に失敗しました'));
@@ -160,17 +124,20 @@ export function PurchaseFormSheet({ onClose, carriedItems }: PurchaseFormSheetPr
   }
 
   return (
-    <BottomSheet title="買い物を記録" onClose={onClose}>
+    <BottomSheet title="購入記録を編集" onClose={onClose}>
+      <div className="field">
+        <label>購入日</label>
+        <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+      </div>
+
       <div className="field">
         <label>合計金額（必須）</label>
         <input
           className="input"
           type="number"
           inputMode="numeric"
-          placeholder="例：2860"
           value={totalAmount}
           onChange={(e) => setTotalAmount(e.target.value)}
-          autoFocus
         />
       </div>
 
@@ -190,7 +157,6 @@ export function PurchaseFormSheet({ onClose, carriedItems }: PurchaseFormSheetPr
             className="input"
             type="number"
             inputMode="numeric"
-            placeholder="例：1600"
             value={foodAmount}
             onChange={(e) => setFoodAmount(e.target.value)}
           />
@@ -225,7 +191,7 @@ export function PurchaseFormSheet({ onClose, carriedItems }: PurchaseFormSheetPr
                     <button
                       key={c}
                       className={`chip${row.category === c ? ' active' : ''}`}
-                      onClick={() => updateRow(row.id, { category: c, addToInventory: c === '食品' })}
+                      onClick={() => updateRow(row.id, { category: c })}
                     >
                       {c}
                     </button>
@@ -273,7 +239,7 @@ export function PurchaseFormSheet({ onClose, carriedItems }: PurchaseFormSheetPr
                     checked={row.addToInventory}
                     onChange={(e) => updateRow(row.id, { addToInventory: e.target.checked })}
                   />
-                  <span>在庫に追加</span>
+                  <span>在庫にも反映する</span>
                 </label>
 
                 {row.addToInventory && (
@@ -343,7 +309,7 @@ export function PurchaseFormSheet({ onClose, carriedItems }: PurchaseFormSheetPr
           <Plus size={16} /> 商品を追加
         </button>
         <p className="text-muted mt-8" style={{ fontSize: 12 }}>
-          ※ 商品を追加しなくても合計金額だけで保存できます。日用品は在庫追加が初期状態でOFFです。
+          ※ 既に在庫へ反映済みの商品は、数量の増減分だけを在庫に反映します。減らす場合、現在の在庫が足りないときは在庫を変更しません。
         </p>
       </div>
 
@@ -356,12 +322,8 @@ export function PurchaseFormSheet({ onClose, carriedItems }: PurchaseFormSheetPr
             style={{ width: '100%', borderRadius: 12, maxHeight: 220, objectFit: 'contain', background: '#fff' }}
           />
         ) : (
-          <button
-            type="button"
-            className="btn btn-outline"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Camera size={18} /> 撮影・画像を選択
+          <button type="button" className="btn btn-outline" onClick={() => fileInputRef.current?.click()}>
+            <Camera size={18} /> {purchase.receiptId ? 'レシートを差し替える' : '撮影・画像を選択'}
           </button>
         )}
         <input

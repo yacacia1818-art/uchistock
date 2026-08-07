@@ -57,6 +57,16 @@ export async function addPurchase(
   }
 }
 
+export async function updatePurchase(purchase: Purchase): Promise<Purchase> {
+  try {
+    const db = await getDB();
+    await db.put('purchases', purchase);
+    return purchase;
+  } catch {
+    throw new AppError('購入記録の更新に失敗しました');
+  }
+}
+
 export async function saveReceiptImage(blob: Blob): Promise<string> {
   try {
     const db = await getDB();

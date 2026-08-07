@@ -1,6 +1,6 @@
-import { ShoppingCart } from 'lucide-react';
+import { ShoppingCart, Trash2 } from 'lucide-react';
 import type { Ingredient } from '../types';
-import { clearExpiryIfEmpty, updateIngredient } from '../repositories/ingredientRepo';
+import { clearExpiryIfEmpty, deleteIngredient, updateIngredient } from '../repositories/ingredientRepo';
 import { notifyDataChanged } from '../utils/bus';
 import { useToast } from './ToastProvider';
 import { toUserMessage } from '../utils/errors';
@@ -25,6 +25,20 @@ export function IngredientRow({ ingredient, onAddToMemo }: IngredientRowProps) {
       notifyDataChanged();
     } catch (e) {
       showToast(toUserMessage(e, '更新に失敗しました'));
+    }
+  }
+
+  async function handleDelete() {
+    const confirmed = confirm(
+      `${ingredient.name}を在庫から削除しますか？\n\nこの操作では現在の在庫のみ削除されます。過去の購入・食事・調理履歴は削除されません。`
+    );
+    if (!confirmed) return;
+    try {
+      await deleteIngredient(ingredient.id);
+      notifyDataChanged();
+      showToast('在庫から削除しました');
+    } catch (e) {
+      showToast(toUserMessage(e, '削除に失敗しました'));
     }
   }
 
@@ -56,6 +70,14 @@ export function IngredientRow({ ingredient, onAddToMemo }: IngredientRowProps) {
         aria-label="買い物メモへ追加"
       >
         <ShoppingCart size={16} />
+      </button>
+      <button
+        className="icon-btn"
+        style={{ color: 'var(--color-text-muted)' }}
+        onClick={handleDelete}
+        aria-label="在庫から削除"
+      >
+        <Trash2 size={16} />
       </button>
     </div>
   );

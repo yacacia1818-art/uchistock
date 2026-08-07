@@ -32,12 +32,9 @@ export const FRACTION_CHOICES: { label: string; value: number | 'all' | 'custom'
   { label: 'その他', value: 'custom' },
 ];
 
-// quantityから残量表示用の文字列を作る（パック等は自然な分数表記、個数系は整数表示）
+// quantityから残量表示用の文字列を作る。単位に関わらず、端数があれば自然な分数で表示する
 export function formatQuantity(quantity: number, unit: string): string {
   const safe = Math.max(0, quantity);
-  if (getUsageMode(unit) === 'count') {
-    return `${Math.round(safe)}${unit}`;
-  }
   return formatFraction(safe, unit);
 }
 

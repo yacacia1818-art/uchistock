@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Ingredient, IngredientUsage, UsageAmount } from '../types';
-import { FRACTION_CHOICES, formatQuantity, getUsageMode } from '../utils/quantity';
+import { FRACTION_CHOICES, formatQuantity, getUsageMode, type UsageMode } from '../utils/quantity';
 
 interface IngredientUsageSelectorProps {
   ingredients: Ingredient[];
@@ -15,16 +15,22 @@ interface CustomFractionInput {
 
 export function IngredientUsageSelector({ ingredients, value, onChange }: IngredientUsageSelectorProps) {
   const [customFractions, setCustomFractions] = useState<Record<string, CustomFractionInput>>({});
+  const [modeOverride, setModeOverride] = useState<Record<string, UsageMode>>({});
 
   const available = ingredients.filter((i) => i.quantity > 0);
   const selectedMap = new Map(value.map((u) => [u.ingredientId, u]));
+
+  function modeFor(ingredient: Ingredient): UsageMode {
+    if (ingredient.quantity < 1) return 'fraction';
+    return modeOverride[ingredient.id] ?? getUsageMode(ingredient.unit);
+  }
 
   function toggle(ingredient: Ingredient) {
     if (selectedMap.has(ingredient.id)) {
       onChange(value.filter((u) => u.ingredientId !== ingredient.id));
       return;
     }
-    const mode = getUsageMode(ingredient.unit);
+    const mode = modeFor(ingredient);
     const defaultValue = mode === 'count' ? 1 : Math.min(1 / 3, ingredient.quantity);
     const defaultAmount: UsageAmount =
       mode === 'count' ? { type: 'count', value: defaultValue } : { type: 'fraction', value: defaultValue };
@@ -44,6 +50,16 @@ export function IngredientUsageSelector({ ingredients, value, onChange }: Ingred
     updateUsage(ingredient.id, { type: 'fraction', value: clamped });
   }
 
+  function switchMode(ingredient: Ingredient, mode: UsageMode) {
+    setModeOverride((prev) => ({ ...prev, [ingredient.id]: mode }));
+    if (!selectedMap.has(ingredient.id)) return;
+    if (mode === 'count') {
+      updateUsage(ingredient.id, { type: 'count', value: 1 });
+    } else {
+      updateUsage(ingredient.id, { type: 'fraction', value: Math.min(1 / 3, ingredient.quantity) });
+    }
+  }
+
   return (
     <div className="card" style={{ padding: '4px 12px' }}>
       {available.length === 0 ? (
@@ -53,7 +69,8 @@ export function IngredientUsageSelector({ ingredients, value, onChange }: Ingred
       ) : (
         available.map((ingredient) => {
           const selected = selectedMap.get(ingredient.id);
-          const mode = getUsageMode(ingredient.unit);
+          const mode = modeFor(ingredient);
+          const canToggleMode = ingredient.quantity >= 1;
           const maxCount = Math.max(1, Math.floor(ingredient.quantity));
           const custom = customFractions[ingredient.id];
           return (
@@ -67,6 +84,22 @@ export function IngredientUsageSelector({ ingredients, value, onChange }: Ingred
               </label>
               {selected && (
                 <div style={{ padding: '0 4px 12px 30px' }}>
+                  {canToggleMode && (
+                    <div className="chip-row" style={{ marginBottom: 8 }}>
+                      <button
+                        className={`chip${mode === 'count' ? ' active' : ''}`}
+                        onClick={() => switchMode(ingredient, 'count')}
+                      >
+                        個数で指定
+                      </button>
+                      <button
+                        className={`chip${mode === 'fraction' ? ' active' : ''}`}
+                        onClick={() => switchMode(ingredient, 'fraction')}
+                      >
+                        割合で指定
+                      </button>
+                    </div>
+                  )}
                   {mode === 'count' ? (
                     <div className="stepper" style={{ justifyContent: 'flex-start', width: 'fit-content' }}>
                       <button

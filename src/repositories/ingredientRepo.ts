@@ -64,6 +64,12 @@ export async function updateIngredient(ingredient: Ingredient): Promise<Ingredie
   }
 }
 
+// 同名・同単位の食材を検索する（購入編集時の差分反映の安全確認に使用）
+export async function findIngredientByNameUnit(name: string, unit: string): Promise<Ingredient | undefined> {
+  const all = await listIngredients();
+  return all.find((i) => i.name.trim() === name.trim() && i.unit === unit);
+}
+
 export async function deleteIngredient(id: string): Promise<void> {
   try {
     const db = await getDB();

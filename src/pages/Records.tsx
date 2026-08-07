@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { ClipboardList, Image as ImageIcon, Plus, Sun, Moon, Cookie } from 'lucide-react';
+import { ClipboardList, Image as ImageIcon, Pencil, Plus, Sun, Moon, Cookie } from 'lucide-react';
 import { Header } from '../components/Header';
 import { BottomSheet } from '../components/BottomSheet';
 import { MealFormSheet } from '../components/MealFormSheet';
 import { CookingFormSheet } from '../components/CookingFormSheet';
 import { PurchaseFormSheet } from '../components/PurchaseFormSheet';
+import { PurchaseEditSheet } from '../components/PurchaseEditSheet';
 import { ReceiptViewer } from '../components/ReceiptViewer';
 import { RecordTypeChooserSheet, type RecordChoice } from '../components/RecordTypeChooserSheet';
 import { listMeals } from '../repositories/mealRepo';
@@ -34,6 +35,7 @@ export function Records() {
   const [showCookingForm, setShowCookingForm] = useState(false);
   const [showPurchaseForm, setShowPurchaseForm] = useState(false);
   const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null);
+  const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
   const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
 
   useEffect(() => {
@@ -174,7 +176,19 @@ export function Records() {
       {showPurchaseForm && <PurchaseFormSheet onClose={() => setShowPurchaseForm(false)} />}
 
       {selectedPurchase && (
-        <BottomSheet title="購入詳細" onClose={() => setSelectedPurchase(null)}>
+        <BottomSheet
+          title="購入詳細"
+          onClose={() => setSelectedPurchase(null)}
+        >
+          <button
+            className="btn btn-outline mb-16"
+            onClick={() => {
+              setEditingPurchase(selectedPurchase);
+              setSelectedPurchase(null);
+            }}
+          >
+            <Pencil size={16} /> 編集
+          </button>
           <div className="field">
             <label>日付</label>
             <div>{formatDateLabel(selectedPurchase.date)} {selectedPurchase.time}</div>
@@ -227,6 +241,14 @@ export function Records() {
             </button>
           )}
         </BottomSheet>
+      )}
+
+      {editingPurchase && (
+        <PurchaseEditSheet
+          purchase={editingPurchase}
+          onClose={() => setEditingPurchase(null)}
+          onSaved={() => {}}
+        />
       )}
 
       {viewingReceipt && (

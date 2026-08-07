@@ -3,6 +3,7 @@ import { Utensils, ShoppingCart, Bell, ChevronRight, Sun, Moon, Cookie } from 'l
 import { Header } from '../components/Header';
 import { MealFormSheet } from '../components/MealFormSheet';
 import { PurchaseFormSheet } from '../components/PurchaseFormSheet';
+import { ExpiryNoticeSheet } from '../components/ExpiryNoticeSheet';
 import { getSettings } from '../repositories/settingsRepo';
 import { getTodayMealsGroupedByType } from '../repositories/mealRepo';
 import { getPeriodCost } from '../services/foodCost';
@@ -34,6 +35,7 @@ export function Home() {
   const [expiringIngredients, setExpiringIngredients] = useState<ExpiringIngredient[]>([]);
   const [showMealForm, setShowMealForm] = useState<MealType | null>(null);
   const [showPurchaseForm, setShowPurchaseForm] = useState(false);
+  const [showNotices, setShowNotices] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -79,8 +81,36 @@ export function Home() {
         icon={<span style={{ fontSize: 22 }}>🍙</span>}
         title="メシログ"
         actions={
-          <button className="icon-btn" aria-label="お知らせ">
+          <button
+            className="icon-btn"
+            aria-label="お知らせ"
+            style={{ position: 'relative' }}
+            onClick={() => setShowNotices(true)}
+          >
             <Bell size={20} />
+            {expiringIngredients.length > 0 && (
+              <span
+                style={{
+                  position: 'absolute',
+                  top: 2,
+                  right: 2,
+                  minWidth: 16,
+                  height: 16,
+                  padding: '0 3px',
+                  borderRadius: 999,
+                  background: 'var(--color-danger)',
+                  color: '#fff',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  lineHeight: 1,
+                }}
+              >
+                {expiringIngredients.length}
+              </span>
+            )}
           </button>
         }
       />
@@ -123,7 +153,7 @@ export function Home() {
           </button>
           <button className="fab green" onClick={() => setShowPurchaseForm(true)}>
             <ShoppingCart size={22} />
-            ＋ 買いを記録
+            ＋ 買い物を記録
             <span style={{ fontWeight: 500, fontSize: 11, opacity: 0.9 }}>買ったものを記録</span>
           </button>
         </div>
@@ -171,6 +201,7 @@ export function Home() {
         <MealFormSheet initialMealType={showMealForm} onClose={() => setShowMealForm(null)} />
       )}
       {showPurchaseForm && <PurchaseFormSheet onClose={() => setShowPurchaseForm(false)} />}
+      {showNotices && <ExpiryNoticeSheet items={expiringIngredients} onClose={() => setShowNotices(false)} />}
     </>
   );
 }

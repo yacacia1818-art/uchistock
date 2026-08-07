@@ -49,6 +49,7 @@ export interface ShoppingMemoItem {
 }
 
 export interface PurchaseItem {
+  id?: string; // v1.2.1: 編集時に商品を特定するための安定ID（未設定は旧データ）
   name: string;
   quantity?: number; // 購入時の数量（レシート上の数量、例：1パック）
   unit?: string;
@@ -58,6 +59,7 @@ export interface PurchaseItem {
 }
 
 export interface InventoryAddition {
+  itemId?: string; // 対応するPurchaseItem.id（編集時の差分計算に使用。未設定は旧データ）
   name: string;
   unit: string;
   quantity: number;

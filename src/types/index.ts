@@ -64,6 +64,8 @@ export interface InventoryAddition {
   unit: string;
   quantity: number;
   expiryDate?: string; // YYYY-MM-DD
+  // v1.3: 在庫作成時のカテゴリ（任意・新規作成時のみ使用。既存食材のカテゴリは上書きしない）
+  category?: IngredientCategory;
 }
 
 export interface Purchase {
@@ -153,4 +155,6 @@ export interface Settings {
   monthlyBudget: number;
   // v1.1: 食費の集計開始日（1〜28）。未設定は1日として扱う
   budgetStartDay?: number;
+  // v1.3: 食事管理機能のON/OFF。未設定（既存ユーザー含む）は常にONとして扱う
+  mealTrackingEnabled?: boolean;
 }

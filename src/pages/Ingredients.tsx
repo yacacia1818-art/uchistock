@@ -3,6 +3,7 @@ import { Package, Plus, Search, ShoppingCart } from 'lucide-react';
 import { Header } from '../components/Header';
 import { IngredientRow } from '../components/IngredientRow';
 import { AddIngredientSheet } from '../components/AddIngredientSheet';
+import { EditIngredientSheet } from '../components/EditIngredientSheet';
 import { AddMemoSheet } from '../components/AddMemoSheet';
 import { PurchaseFormSheet } from '../components/PurchaseFormSheet';
 import { listIngredients } from '../repositories/ingredientRepo';
@@ -36,7 +37,7 @@ export function Ingredients() {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<IngredientCategory | 'すべて'>('すべて');
   const [showAddIngredient, setShowAddIngredient] = useState(false);
-  const [showAddMemo, setShowAddMemo] = useState<string | undefined>(undefined);
+  const [editingIngredient, setEditingIngredient] = useState<Ingredient | null>(null);
   const [showAddMemoOpen, setShowAddMemoOpen] = useState(false);
   const [showPurchaseCarry, setShowPurchaseCarry] = useState(false);
 
@@ -134,11 +135,7 @@ export function Ingredients() {
                 <div className="empty-state">まだ食材が登録されていません</div>
               ) : (
                 filteredIngredients.map((i) => (
-                  <IngredientRow
-                    key={i.id}
-                    ingredient={i}
-                    onAddToMemo={(name) => setShowAddMemo(name)}
-                  />
+                  <IngredientRow key={i.id} ingredient={i} onEdit={(ing) => setEditingIngredient(ing)} />
                 ))
               )}
             </div>
@@ -203,8 +200,8 @@ export function Ingredients() {
       </div>
 
       {showAddIngredient && <AddIngredientSheet onClose={() => setShowAddIngredient(false)} />}
-      {showAddMemo !== undefined && (
-        <AddMemoSheet initialName={showAddMemo} onClose={() => setShowAddMemo(undefined)} />
+      {editingIngredient && (
+        <EditIngredientSheet ingredient={editingIngredient} onClose={() => setEditingIngredient(null)} />
       )}
       {showAddMemoOpen && <AddMemoSheet onClose={() => setShowAddMemoOpen(false)} />}
       {showPurchaseCarry && (

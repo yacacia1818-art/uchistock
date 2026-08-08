@@ -1,4 +1,4 @@
-import { ShoppingCart, Trash2 } from 'lucide-react';
+import { Pencil, Trash2 } from 'lucide-react';
 import type { Ingredient } from '../types';
 import { decrementIngredientQuantity, deleteIngredient, updateIngredient } from '../repositories/ingredientRepo';
 import { notifyDataChanged } from '../utils/bus';
@@ -6,17 +6,20 @@ import { useToast } from './ToastProvider';
 import { toUserMessage } from '../utils/errors';
 import { formatQuantity } from '../utils/quantity';
 import { formatExpiryRelative, daysUntil, getEarliestExpiry } from '../utils/expiry';
+import { expiryUrgency, expiryUrgencyIcon, expiryUrgencyStyle } from '../utils/expiryUi';
 import { INGREDIENT_CATEGORY_EMOJI } from '../utils/categoryEmoji';
 import { formatDateLabel } from '../utils/date';
 
 interface IngredientRowProps {
   ingredient: Ingredient;
-  onAddToMemo: (name: string) => void;
+  onEdit: (ingredient: Ingredient) => void;
 }
 
-export function IngredientRow({ ingredient, onAddToMemo }: IngredientRowProps) {
+export function IngredientRow({ ingredient, onEdit }: IngredientRowProps) {
   const { showToast } = useToast();
   const earliestExpiry = getEarliestExpiry(ingredient);
+  const days = earliestExpiry ? daysUntil(earliestExpiry) : undefined;
+  const urgency = days !== undefined ? expiryUrgency(days) : undefined;
 
   async function stepQuantity(delta: number) {
     try {
@@ -48,33 +51,43 @@ export function IngredientRow({ ingredient, onAddToMemo }: IngredientRowProps) {
   }
 
   return (
-    <div className="list-row">
+    <div className="list-row" style={{ flexWrap: 'wrap', rowGap: 10 }}>
       <div className="row-emoji">{INGREDIENT_CATEGORY_EMOJI[ingredient.category] ?? '🍽️'}</div>
-      <div className="row-main">
+      <button
+        className="row-main"
+        onClick={() => onEdit(ingredient)}
+        aria-label={`${ingredient.name}を編集`}
+        style={{
+          flex: '1 1 140px',
+          background: 'none',
+          border: 'none',
+          padding: 0,
+          textAlign: 'left',
+          font: 'inherit',
+          color: 'inherit',
+        }}
+      >
         <div className="row-title">{ingredient.name}</div>
         <div className="row-sub">
           {ingredient.category}
-          {earliestExpiry && (
-            <span> ・期限 {formatDateLabel(earliestExpiry).replace(/（.*）/, '')}（{formatExpiryRelative(daysUntil(earliestExpiry))}）</span>
+          {earliestExpiry && urgency ? (
+            <span style={expiryUrgencyStyle(urgency)}>
+              {' '}
+              ・{expiryUrgencyIcon(urgency)}
+              {formatDateLabel(earliestExpiry).replace(/（.*）/, '')}まで（{formatExpiryRelative(days!)}）
+            </span>
+          ) : (
+            <span> ・期限未設定</span>
           )}
         </div>
-      </div>
-      <div className="stepper">
-        <button onClick={() => stepQuantity(-1)} aria-label="減らす">
-          −
-        </button>
-        <span style={{ minWidth: 48 }}>{formatQuantity(ingredient.quantity, ingredient.unit)}</span>
-        <button onClick={() => stepQuantity(1)} aria-label="増やす">
-          ＋
-        </button>
-      </div>
+      </button>
       <button
         className="icon-btn"
         style={{ background: 'var(--color-primary)', color: '#fff', borderRadius: 10 }}
-        onClick={() => onAddToMemo(ingredient.name)}
-        aria-label="買い物メモへ追加"
+        onClick={() => onEdit(ingredient)}
+        aria-label="食材を編集"
       >
-        <ShoppingCart size={16} />
+        <Pencil size={16} />
       </button>
       <button
         className="icon-btn"
@@ -84,6 +97,15 @@ export function IngredientRow({ ingredient, onAddToMemo }: IngredientRowProps) {
       >
         <Trash2 size={16} />
       </button>
+      <div className="stepper" style={{ flexBasis: '100%', justifyContent: 'flex-end' }}>
+        <button onClick={() => stepQuantity(-1)} aria-label="減らす">
+          −
+        </button>
+        <span style={{ minWidth: 48 }}>{formatQuantity(ingredient.quantity, ingredient.unit)}</span>
+        <button onClick={() => stepQuantity(1)} aria-label="増やす">
+          ＋
+        </button>
+      </div>
     </div>
   );
 }

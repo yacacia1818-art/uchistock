@@ -25,6 +25,7 @@ export function CalendarPage() {
   const [budget, setBudget] = useState(15000);
   const [periodUsed, setPeriodUsed] = useState(0);
   const [periodLabel, setPeriodLabel] = useState('');
+  const [mealTrackingEnabled, setMealTrackingEnabled] = useState(true);
   const [selectedDate, setSelectedDate] = useState<string>(todayDateStr());
 
   const { meals, purchases, cookedDishes, recordedDates, expiryByDate } = useMonthCalendarData(ym, version, (e) =>
@@ -36,6 +37,7 @@ export function CalendarPage() {
       .then(async ([s, expiring]) => {
         setExpiringList(expiring);
         setBudget(s.monthlyBudget);
+        setMealTrackingEnabled(s.mealTrackingEnabled ?? true);
         const period = getCurrentPeriod(s.budgetStartDay);
         setPeriodLabel(formatPeriodRangeLabel(period));
         const cost = await getPeriodCost(period);
@@ -112,6 +114,7 @@ export function CalendarPage() {
           purchases={purchases}
           cookedDishes={cookedDishes}
           expiringIngredients={dayExpiring}
+          mealTrackingEnabled={mealTrackingEnabled}
         />
       </div>
     </>

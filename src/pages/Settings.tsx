@@ -2,7 +2,12 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Settings as SettingsIcon } from 'lucide-react';
 import { Header } from '../components/Header';
-import { getSettings, updateMonthlyBudget, updateBudgetStartDay } from '../repositories/settingsRepo';
+import {
+  getSettings,
+  updateMonthlyBudget,
+  updateBudgetStartDay,
+  updateMealTrackingEnabled,
+} from '../repositories/settingsRepo';
 import { useToast } from '../components/ToastProvider';
 import { notifyDataChanged } from '../utils/bus';
 import { toUserMessage } from '../utils/errors';
@@ -14,6 +19,7 @@ export function Settings() {
   const { showToast } = useToast();
   const [budget, setBudget] = useState('15000');
   const [startDay, setStartDay] = useState(1);
+  const [mealTrackingEnabled, setMealTrackingEnabled] = useState(true);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -21,9 +27,21 @@ export function Settings() {
       .then((s) => {
         setBudget(String(s.monthlyBudget));
         setStartDay(s.budgetStartDay ?? 1);
+        setMealTrackingEnabled(s.mealTrackingEnabled ?? true);
       })
       .catch((e) => showToast(toUserMessage(e, '設定の読み込みに失敗しました')));
   }, [showToast]);
+
+  async function handleToggleMealTracking(enabled: boolean) {
+    setMealTrackingEnabled(enabled);
+    try {
+      await updateMealTrackingEnabled(enabled);
+      notifyDataChanged();
+      showToast('保存しました');
+    } catch (e) {
+      showToast(toUserMessage(e, '保存に失敗しました'));
+    }
+  }
 
   async function handleSaveBudget() {
     const value = Number(budget);
@@ -102,6 +120,27 @@ export function Settings() {
                 </option>
               ))}
             </select>
+          </div>
+        </div>
+
+        <div className="card mb-16">
+          <div className="section-title">食事管理</div>
+          <p className="text-muted mb-16" style={{ fontSize: 13 }}>
+            食べたものを記録・管理します。OFFにすると「今日のごはん」などの食事記録機能が隠れ、在庫・期限・調理済み料理の管理を中心に使えます。
+          </p>
+          <div className="chip-row">
+            <button
+              className={`chip${mealTrackingEnabled ? ' active' : ''}`}
+              onClick={() => handleToggleMealTracking(true)}
+            >
+              ON
+            </button>
+            <button
+              className={`chip${!mealTrackingEnabled ? ' active' : ''}`}
+              onClick={() => handleToggleMealTracking(false)}
+            >
+              OFF
+            </button>
           </div>
         </div>
 

@@ -2,11 +2,15 @@ import { getDB } from '../db/db';
 import type { Settings } from '../types';
 import { AppError } from '../utils/errors';
 
-const DEFAULT_SETTINGS: Settings = { id: 'settings', monthlyBudget: 15000, budgetStartDay: 1 };
+const DEFAULT_SETTINGS: Settings = { id: 'settings', monthlyBudget: 15000, budgetStartDay: 1, mealTrackingEnabled: true };
 
 function normalize(settings: Settings | undefined): Settings {
   if (!settings) return DEFAULT_SETTINGS;
-  return { ...settings, budgetStartDay: settings.budgetStartDay ?? 1 };
+  return {
+    ...settings,
+    budgetStartDay: settings.budgetStartDay ?? 1,
+    mealTrackingEnabled: settings.mealTrackingEnabled ?? true,
+  };
 }
 
 export async function getSettings(): Promise<Settings> {
@@ -42,6 +46,18 @@ export async function updateBudgetStartDay(budgetStartDay: number): Promise<Sett
     const db = await getDB();
     const current = normalize(await db.get('settings', 'settings'));
     const settings: Settings = { ...current, budgetStartDay };
+    await db.put('settings', settings);
+    return settings;
+  } catch {
+    throw new AppError('設定の保存に失敗しました');
+  }
+}
+
+export async function updateMealTrackingEnabled(enabled: boolean): Promise<Settings> {
+  try {
+    const db = await getDB();
+    const current = normalize(await db.get('settings', 'settings'));
+    const settings: Settings = { ...current, mealTrackingEnabled: enabled };
     await db.put('settings', settings);
     return settings;
   } catch {

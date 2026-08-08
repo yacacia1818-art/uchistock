@@ -13,6 +13,7 @@ import { RecordTypeChooserSheet, type RecordChoice } from '../components/RecordT
 import { listMeals } from '../repositories/mealRepo';
 import { listPurchases } from '../repositories/purchaseRepo';
 import { listCookedDishes } from '../repositories/cookedDishRepo';
+import { getSettings } from '../repositories/settingsRepo';
 import { useDataVersion } from '../hooks/useDataVersion';
 import { useToast } from '../components/ToastProvider';
 import { toUserMessage } from '../utils/errors';
@@ -32,6 +33,7 @@ export function Records() {
   const [meals, setMeals] = useState<Meal[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [cookedDishes, setCookedDishes] = useState<CookedDish[]>([]);
+  const [mealTrackingEnabled, setMealTrackingEnabled] = useState(true);
   const [showChooser, setShowChooser] = useState(false);
   const [showMealForm, setShowMealForm] = useState(false);
   const [showCookingForm, setShowCookingForm] = useState(false);
@@ -45,11 +47,14 @@ export function Records() {
   const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([listMeals(), listPurchases(), listCookedDishes()])
-      .then(([m, p, c]) => {
+    Promise.all([listMeals(), listPurchases(), listCookedDishes(), getSettings()])
+      .then(([m, p, c, s]) => {
         setMeals(m);
         setPurchases(p);
         setCookedDishes(c);
+        const enabled = s.mealTrackingEnabled ?? true;
+        setMealTrackingEnabled(enabled);
+        setTab((prev) => (!enabled && prev === 'meals' ? 'cooking' : prev));
       })
       .catch((e) => showToast(toUserMessage(e, 'データの読み込みに失敗しました')));
   }, [version, showToast]);
@@ -74,9 +79,11 @@ export function Records() {
       />
       <div className="page-content">
         <div className="tabs">
-          <button className={`tab${tab === 'meals' ? ' active' : ''}`} onClick={() => setTab('meals')}>
-            食事
-          </button>
+          {mealTrackingEnabled && (
+            <button className={`tab${tab === 'meals' ? ' active' : ''}`} onClick={() => setTab('meals')}>
+              食事
+            </button>
+          )}
           <button className={`tab${tab === 'cooking' ? ' active' : ''}`} onClick={() => setTab('cooking')}>
             調理
           </button>
@@ -85,7 +92,7 @@ export function Records() {
           </button>
         </div>
 
-        {tab === 'meals' && (
+        {tab === 'meals' && mealTrackingEnabled && (
           <div className="card">
             {meals.length === 0 ? (
               <div className="empty-state">まだ食事記録がありません</div>
@@ -192,9 +199,13 @@ export function Records() {
       </div>
 
       {showChooser && (
-        <RecordTypeChooserSheet onClose={() => setShowChooser(false)} onChoose={handleChoose} />
+        <RecordTypeChooserSheet
+          onClose={() => setShowChooser(false)}
+          onChoose={handleChoose}
+          mealTrackingEnabled={mealTrackingEnabled}
+        />
       )}
-      {showMealForm && <MealFormSheet onClose={() => setShowMealForm(false)} />}
+      {showMealForm && mealTrackingEnabled && <MealFormSheet onClose={() => setShowMealForm(false)} />}
       {showCookingForm && <CookingFormSheet onClose={() => setShowCookingForm(false)} />}
       {showPurchaseForm && <PurchaseFormSheet onClose={() => setShowPurchaseForm(false)} />}
 

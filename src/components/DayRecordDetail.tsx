@@ -12,6 +12,8 @@ interface DayRecordDetailProps {
   purchases: Purchase[];
   cookedDishes: CookedDish[];
   expiringIngredients: Ingredient[];
+  // 食事管理OFFのときは食事記録を表示しない（記録自体は削除しない）
+  mealTrackingEnabled?: boolean;
 }
 
 // 選択日の記録（食事・調理・買い物・期限）を表示。Home / CalendarPage で共通利用
@@ -21,10 +23,13 @@ export function DayRecordDetail({
   purchases,
   cookedDishes,
   expiringIngredients,
+  mealTrackingEnabled = true,
 }: DayRecordDetailProps) {
-  const dayMeals = meals
-    .filter((m) => m.date === selectedDate)
-    .sort((a, b) => MEAL_ORDER.indexOf(a.mealType) - MEAL_ORDER.indexOf(b.mealType));
+  const dayMeals = mealTrackingEnabled
+    ? meals
+        .filter((m) => m.date === selectedDate)
+        .sort((a, b) => MEAL_ORDER.indexOf(a.mealType) - MEAL_ORDER.indexOf(b.mealType))
+    : [];
   const dayPurchases = purchases.filter((p) => p.date === selectedDate);
   const dayCooking = cookedDishes.filter((c) => c.date === selectedDate);
 

@@ -7,7 +7,9 @@ import { notifyDataChanged } from '../utils/bus';
 import { toUserMessage } from '../utils/errors';
 import { generateId } from '../utils/id';
 import { UNIT_OPTIONS } from '../types';
-import type { Purchase, ShoppingCategory } from '../types';
+import type { IngredientCategory, Purchase, ShoppingCategory } from '../types';
+
+const INGREDIENT_CATEGORIES: IngredientCategory[] = ['野菜', '肉・魚', '卵・乳製品', '主食', 'その他'];
 
 interface PurchaseEditSheetProps {
   purchase: Purchase;
@@ -35,6 +37,7 @@ function buildRowsFromPurchase(purchase: Purchase): EditableItemRow[] {
       convertUnit: !!prior && prior.unit !== (item.unit ?? '個'),
       invQuantity: prior ? String(prior.quantity) : item.quantity !== undefined ? String(item.quantity) : '',
       invUnit: prior ? prior.unit : item.unit ?? '個',
+      ingredientCategory: prior?.category ?? 'その他',
     };
   });
 }
@@ -52,6 +55,7 @@ function blankRow(): EditableItemRow {
     convertUnit: false,
     invQuantity: '',
     invUnit: '個',
+    ingredientCategory: 'その他',
   };
 }
 
@@ -285,18 +289,36 @@ export function PurchaseEditSheet({ purchase, onClose, onSaved }: PurchaseEditSh
                       </div>
                     )}
                     {row.category === '食品' && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span className="text-muted" style={{ fontSize: 12 }}>
-                          期限
-                        </span>
-                        <input
-                          className="input"
-                          type="date"
-                          style={{ flex: 1, padding: '8px 10px' }}
-                          value={row.expiryDate}
-                          onChange={(e) => updateRow(row.id, { expiryDate: e.target.value })}
-                        />
-                      </div>
+                      <>
+                        <div style={{ marginBottom: 8 }}>
+                          <span className="text-muted" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
+                            食材カテゴリ
+                          </span>
+                          <div className="chip-row">
+                            {INGREDIENT_CATEGORIES.map((c) => (
+                              <button
+                                key={c}
+                                className={`chip${row.ingredientCategory === c ? ' active' : ''}`}
+                                onClick={() => updateRow(row.id, { ingredientCategory: c })}
+                              >
+                                {c}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span className="text-muted" style={{ fontSize: 12 }}>
+                            期限
+                          </span>
+                          <input
+                            className="input"
+                            type="date"
+                            style={{ flex: 1, padding: '8px 10px' }}
+                            value={row.expiryDate}
+                            onChange={(e) => updateRow(row.id, { expiryDate: e.target.value })}
+                          />
+                        </div>
+                      </>
                     )}
                   </div>
                 )}

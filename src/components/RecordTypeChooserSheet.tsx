@@ -6,6 +6,7 @@ export type RecordChoice = 'meal' | 'cooking' | 'purchase';
 interface RecordTypeChooserSheetProps {
   onClose: () => void;
   onChoose: (choice: RecordChoice) => void;
+  mealTrackingEnabled?: boolean;
 }
 
 const CHOICES: { choice: RecordChoice; label: string; icon: typeof Utensils }[] = [
@@ -14,11 +15,12 @@ const CHOICES: { choice: RecordChoice; label: string; icon: typeof Utensils }[] 
   { choice: 'purchase', label: '買い物', icon: ShoppingCart },
 ];
 
-export function RecordTypeChooserSheet({ onClose, onChoose }: RecordTypeChooserSheetProps) {
+export function RecordTypeChooserSheet({ onClose, onChoose, mealTrackingEnabled = true }: RecordTypeChooserSheetProps) {
+  const choices = mealTrackingEnabled ? CHOICES : CHOICES.filter((c) => c.choice !== 'meal');
   return (
     <BottomSheet title="何を記録しますか？" onClose={onClose} variant="dialog">
-      <div className="grid-2" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
-        {CHOICES.map(({ choice, label, icon: Icon }) => (
+      <div className="grid-2" style={{ gridTemplateColumns: choices.length === 3 ? '1fr 1fr 1fr' : '1fr 1fr' }}>
+        {choices.map(({ choice, label, icon: Icon }) => (
           <button
             key={choice}
             className="fab"

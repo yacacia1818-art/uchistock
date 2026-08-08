@@ -44,7 +44,13 @@ export async function recordPurchase(input: RecordPurchaseInput): Promise<Purcha
 
   if (input.inventoryAdditions) {
     for (const addition of input.inventoryAdditions) {
-      await addOrMergeIngredient(addition.name, addition.unit, addition.quantity, 'その他', addition.expiryDate);
+      await addOrMergeIngredient(
+        addition.name,
+        addition.unit,
+        addition.quantity,
+        addition.category ?? 'その他',
+        addition.expiryDate
+      );
     }
   }
 

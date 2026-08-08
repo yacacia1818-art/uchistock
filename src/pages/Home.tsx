@@ -1,17 +1,33 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Utensils, ShoppingCart, Bell, ChevronRight, ChevronUp, ChevronDown, Sun, Moon, Cookie } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import {
+  Utensils,
+  ShoppingCart,
+  Bell,
+  ChevronRight,
+  ChevronUp,
+  ChevronDown,
+  Sun,
+  Moon,
+  Cookie,
+  Plus,
+  ChefHat,
+} from 'lucide-react';
 import { Header } from '../components/Header';
 import { MealFormSheet } from '../components/MealFormSheet';
 import { PurchaseFormSheet } from '../components/PurchaseFormSheet';
 import { ExpiryNoticeSheet } from '../components/ExpiryNoticeSheet';
+import { AddIngredientSheet } from '../components/AddIngredientSheet';
 import { MonthCalendarCard } from '../components/MonthCalendarCard';
 import { DayRecordDetail } from '../components/DayRecordDetail';
 import { getSettings } from '../repositories/settingsRepo';
 import { getTodayMealsGroupedByType } from '../repositories/mealRepo';
+import { listAvailableCookedDishes } from '../repositories/cookedDishRepo';
 import { getPeriodCost } from '../services/foodCost';
 import { listExpiringIngredients, type ExpiringIngredient } from '../services/expirySummary';
 import { getCurrentPeriod, formatPeriodRangeLabel, remainingDaysInPeriod } from '../utils/period';
 import { formatExpiryRelative } from '../utils/expiry';
+import { expiryUrgency, expiryUrgencyIcon, expiryUrgencyStyle } from '../utils/expiryUi';
 import { addMonths, currentYearMonth, formatDateLabel, todayDateStr } from '../utils/date';
 import { formatQuantity } from '../utils/quantity';
 import { useDataVersion } from '../hooks/useDataVersion';
@@ -19,7 +35,7 @@ import { useMonthCalendarData } from '../hooks/useMonthCalendarData';
 import { useToast } from '../components/ToastProvider';
 import { toUserMessage } from '../utils/errors';
 import { mealContentLabel } from '../utils/mealDisplay';
-import type { Meal, MealType } from '../types';
+import type { CookedDish, Meal, MealType } from '../types';
 
 const MEAL_ROWS: { type: MealType; icon: typeof Sun }[] = [
   { type: '朝食', icon: Sun },
@@ -34,16 +50,20 @@ const EXPIRY_LIST_LIMIT = 5;
 const MEALS_COLLAPSED_KEY = 'meshi-log:home-meals-collapsed';
 
 export function Home() {
+  const navigate = useNavigate();
   const { showToast } = useToast();
   const version = useDataVersion();
   const [budget, setBudget] = useState(15000);
   const [used, setUsed] = useState(0);
   const [startDay, setStartDay] = useState(1);
+  const [mealTrackingEnabled, setMealTrackingEnabled] = useState(true);
   const [todayMeals, setTodayMeals] = useState<Record<string, Meal[]>>({});
+  const [cookedStock, setCookedStock] = useState<CookedDish[]>([]);
   const [bellExpiring, setBellExpiring] = useState<ExpiringIngredient[]>([]);
   const [allExpiring, setAllExpiring] = useState<ExpiringIngredient[]>([]);
   const [showMealForm, setShowMealForm] = useState<MealType | null>(null);
   const [showPurchaseForm, setShowPurchaseForm] = useState(false);
+  const [showAddIngredient, setShowAddIngredient] = useState(false);
   const [showNotices, setShowNotices] = useState(false);
   const [showAllExpiring, setShowAllExpiring] = useState(false);
   const [mealsCollapsed, setMealsCollapsed] = useState(() => {
@@ -70,18 +90,21 @@ export function Home() {
       try {
         const settings = await getSettings();
         const period = getCurrentPeriod(settings.budgetStartDay);
-        const [cost, meals, expiring] = await Promise.all([
+        const [cost, meals, expiring, dishes] = await Promise.all([
           getPeriodCost(period),
           getTodayMealsGroupedByType(),
           listExpiringIngredients(),
+          listAvailableCookedDishes(),
         ]);
         if (cancelled) return;
         setBudget(settings.monthlyBudget);
         setStartDay(settings.budgetStartDay ?? 1);
+        setMealTrackingEnabled(settings.mealTrackingEnabled ?? true);
         setUsed(cost.used);
         setTodayMeals(meals);
         setAllExpiring(expiring);
         setBellExpiring(expiring.filter((e) => e.days <= EXPIRY_WARNING_DAYS));
+        setCookedStock(dishes.filter((d) => d.servingsRemaining !== undefined && d.servingsRemaining > 0));
       } catch (e) {
         showToast(toUserMessage(e, 'データの読み込みに失敗しました'));
       }
@@ -92,11 +115,14 @@ export function Home() {
     };
   }, [version, showToast]);
 
-  const { meals, purchases, cookedDishes, recordedDates, expiryByDate } = useMonthCalendarData(ym, version, (e) =>
-    showToast(toUserMessage(e, 'データの読み込みに失敗しました'))
+  const { meals, purchases, cookedDishes, ingredients, recordedDates, expiryByDate } = useMonthCalendarData(
+    ym,
+    version,
+    (e) => showToast(toUserMessage(e, 'データの読み込みに失敗しました'))
   );
   const expiryDates = useMemo(() => new Set(expiryByDate.keys()), [expiryByDate]);
   const dayExpiring = expiryByDate.get(selectedDate) ?? [];
+  const activeIngredientCount = ingredients.filter((i) => i.quantity > 0).length;
 
   const period = getCurrentPeriod(startDay);
   const periodLabel = startDay === 1 ? '今月の食費' : '今期の食費';
@@ -184,66 +210,110 @@ export function Home() {
         </div>
 
         <div className="fab-row">
-          <button className="fab orange" onClick={() => setShowMealForm('朝食')}>
-            <Utensils size={22} />
-            ＋ 食事を記録
-            <span style={{ fontWeight: 500, fontSize: 11, opacity: 0.9 }}>食べたものを記録</span>
-          </button>
+          {mealTrackingEnabled && (
+            <button className="fab orange" onClick={() => setShowMealForm('朝食')}>
+              <Utensils size={22} />
+              ＋ 食事を記録
+              <span style={{ fontWeight: 500, fontSize: 11, opacity: 0.9 }}>食べたものを記録</span>
+            </button>
+          )}
           <button className="fab green" onClick={() => setShowPurchaseForm(true)}>
             <ShoppingCart size={22} />
             ＋ 買い物を記録
             <span style={{ fontWeight: 500, fontSize: 11, opacity: 0.9 }}>買ったものを記録</span>
           </button>
+          {!mealTrackingEnabled && (
+            <button className="fab orange" onClick={() => setShowAddIngredient(true)}>
+              <Plus size={22} />
+              ＋ 食材を追加
+              <span style={{ fontWeight: 500, fontSize: 11, opacity: 0.9 }}>在庫に直接追加</span>
+            </button>
+          )}
         </div>
 
-        <div className="card mb-16">
-          <button
-            className="section-title"
-            style={{
-              width: '100%',
-              background: 'none',
-              border: 'none',
-              textAlign: 'left',
-              font: 'inherit',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              cursor: 'pointer',
-              padding: 0,
-              margin: mealsCollapsed ? 0 : '0 0 12px',
-            }}
-            onClick={() => setMealsCollapsed((v) => !v)}
-            aria-expanded={!mealsCollapsed}
-          >
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>🍴 今日のごはん</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              {mealsCollapsed && (
-                <span className="text-muted" style={{ fontSize: 13, fontWeight: 700 }}>
-                  {recordedCoreMealCount}/3食 記録済み
-                </span>
-              )}
-              {mealsCollapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
-            </span>
-          </button>
-          {!mealsCollapsed &&
-            MEAL_ROWS.map(({ type, icon: Icon }) => (
-              <button
-                key={type}
-                className="link-row"
-                style={{ width: '100%', background: 'none', border: 'none', textAlign: 'left', font: 'inherit' }}
-                onClick={() => setShowMealForm(type)}
-              >
-                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Icon size={16} />
-                  {type}
-                </span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <span className={todayMeals[type]?.length ? '' : 'text-muted'}>{mealSummary(todayMeals[type])}</span>
-                  <ChevronRight size={16} className="text-muted" />
-                </span>
-              </button>
-            ))}
-        </div>
+        {mealTrackingEnabled && (
+          <div className="card mb-16">
+            <button
+              className="section-title"
+              style={{
+                width: '100%',
+                background: 'none',
+                border: 'none',
+                textAlign: 'left',
+                font: 'inherit',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                cursor: 'pointer',
+                padding: 0,
+                margin: mealsCollapsed ? 0 : '0 0 12px',
+              }}
+              onClick={() => setMealsCollapsed((v) => !v)}
+              aria-expanded={!mealsCollapsed}
+            >
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>🍴 今日のごはん</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                {mealsCollapsed && (
+                  <span className="text-muted" style={{ fontSize: 13, fontWeight: 700 }}>
+                    {recordedCoreMealCount}/3食 記録済み
+                  </span>
+                )}
+                {mealsCollapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+              </span>
+            </button>
+            {!mealsCollapsed &&
+              MEAL_ROWS.map(({ type, icon: Icon }) => (
+                <button
+                  key={type}
+                  className="link-row"
+                  style={{ width: '100%', background: 'none', border: 'none', textAlign: 'left', font: 'inherit' }}
+                  onClick={() => setShowMealForm(type)}
+                >
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Icon size={16} />
+                    {type}
+                  </span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span className={todayMeals[type]?.length ? '' : 'text-muted'}>{mealSummary(todayMeals[type])}</span>
+                    <ChevronRight size={16} className="text-muted" />
+                  </span>
+                </button>
+              ))}
+          </div>
+        )}
+
+        {!mealTrackingEnabled && (
+          <div className="card mb-16">
+            <div className="section-title">🧺 現在の食材</div>
+            <div style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 8 }}>
+              {activeIngredientCount}種類
+            </div>
+            {allExpiring.length > 0 && (
+              <>
+                <div className="text-muted" style={{ fontSize: 12, marginBottom: 4 }}>
+                  期限が近いもの
+                </div>
+                {allExpiring.slice(0, 3).map(({ ingredient, days }) => {
+                  const urgency = expiryUrgency(days);
+                  return (
+                    <div className="link-row" key={ingredient.id}>
+                      <span>
+                        {ingredient.name}　{formatQuantity(ingredient.quantity, ingredient.unit)}
+                      </span>
+                      <span style={expiryUrgencyStyle(urgency)}>
+                        {expiryUrgencyIcon(urgency)}
+                        {formatExpiryRelative(days)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </>
+            )}
+            <button className="btn btn-outline mt-8" onClick={() => navigate('/ingredients')}>
+              すべての食材を見る
+            </button>
+          </div>
+        )}
 
         <div className="section-title">📅 カレンダー</div>
         <MonthCalendarCard
@@ -262,10 +332,11 @@ export function Home() {
             purchases={purchases}
             cookedDishes={cookedDishes}
             expiringIngredients={dayExpiring}
+            mealTrackingEnabled={mealTrackingEnabled}
           />
         </div>
 
-        <div className="card">
+        <div className="card mb-16">
           <div className="section-title">⏰ 期限が近い食材</div>
           {allExpiring.length === 0 ? (
             <p className="text-muted" style={{ fontSize: 13 }}>
@@ -273,19 +344,20 @@ export function Home() {
             </p>
           ) : (
             <>
-              {visibleExpiring.map(({ ingredient, days }) => (
-                <div className="link-row" key={ingredient.id}>
-                  <span
-                    className={days <= 0 ? '' : 'text-muted'}
-                    style={{ fontWeight: 700, color: days <= 0 ? 'var(--color-danger)' : undefined }}
-                  >
-                    {formatExpiryRelative(days)}
-                  </span>
-                  <span>
-                    {ingredient.name}　{formatQuantity(ingredient.quantity, ingredient.unit)}
-                  </span>
-                </div>
-              ))}
+              {visibleExpiring.map(({ ingredient, days }) => {
+                const urgency = expiryUrgency(days);
+                return (
+                  <div className="link-row" key={ingredient.id}>
+                    <span style={expiryUrgencyStyle(urgency)}>
+                      {expiryUrgencyIcon(urgency)}
+                      {formatExpiryRelative(days)}
+                    </span>
+                    <span>
+                      {ingredient.name}　{formatQuantity(ingredient.quantity, ingredient.unit)}
+                    </span>
+                  </div>
+                );
+              })}
               {allExpiring.length > EXPIRY_LIST_LIMIT && (
                 <button
                   className="link-row"
@@ -306,12 +378,31 @@ export function Home() {
             </>
           )}
         </div>
+
+        <div className="card">
+          <div className="section-title">
+            <ChefHat size={16} /> 調理済み
+          </div>
+          {cookedStock.length === 0 ? (
+            <p className="text-muted" style={{ fontSize: 13 }}>
+              食べられる調理済み料理はありません
+            </p>
+          ) : (
+            cookedStock.slice(0, 5).map((dish) => (
+              <div className="link-row" key={dish.id}>
+                <span>{dish.name}</span>
+                <span className="text-muted">残り{dish.servingsRemaining}食分</span>
+              </div>
+            ))
+          )}
+        </div>
       </div>
 
       {showMealForm && (
         <MealFormSheet initialMealType={showMealForm} onClose={() => setShowMealForm(null)} />
       )}
       {showPurchaseForm && <PurchaseFormSheet onClose={() => setShowPurchaseForm(false)} />}
+      {showAddIngredient && <AddIngredientSheet onClose={() => setShowAddIngredient(false)} />}
       {showNotices && <ExpiryNoticeSheet items={bellExpiring} onClose={() => setShowNotices(false)} />}
     </>
   );

@@ -159,8 +159,11 @@ export async function buildAiConsultText(topic: AiConsultTopic): Promise<string>
     )
   );
 
-  const mealText = meals.length > 0 ? formatMealsByDate(meals) : '';
-  sections.push(['【最近の食事】', mealText || 'なし'].join('\n'));
+  const mealTrackingEnabled = settings.mealTrackingEnabled ?? true;
+  const mealText = mealTrackingEnabled ? formatMealsByDate(meals) : '';
+  sections.push(
+    ['【最近の食事】', mealTrackingEnabled ? mealText || 'なし' : '食事管理OFFのため記録なし'].join('\n')
+  );
 
   const cookingText = cookedDishes.length > 0 ? formatCookingHistory(cookedDishes) : '';
   sections.push(['【最近の調理】', cookingText || 'なし'].join('\n'));

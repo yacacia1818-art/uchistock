@@ -8,7 +8,9 @@ import { toUserMessage } from '../utils/errors';
 import { parseMemoQuantity } from '../utils/quantity';
 import { generateId } from '../utils/id';
 import { UNIT_OPTIONS } from '../types';
-import type { ShoppingCategory, ShoppingMemoItem } from '../types';
+import type { IngredientCategory, ShoppingCategory, ShoppingMemoItem } from '../types';
+
+const INGREDIENT_CATEGORIES: IngredientCategory[] = ['野菜', '肉・魚', '卵・乳製品', '主食', 'その他'];
 
 interface PurchaseFormSheetProps {
   onClose: () => void;
@@ -27,6 +29,7 @@ interface PurchaseRow {
   invQuantity: string;
   invUnit: string;
   expiryDate: string;
+  ingredientCategory: IngredientCategory;
 }
 
 function buildRowFromMemoItem(item: ShoppingMemoItem): PurchaseRow {
@@ -47,6 +50,7 @@ function buildRowFromMemoItem(item: ShoppingMemoItem): PurchaseRow {
     invQuantity: String(quantity),
     invUnit: unit,
     expiryDate: '',
+    ingredientCategory: 'その他',
   };
 }
 
@@ -63,6 +67,7 @@ function blankRow(): PurchaseRow {
     invQuantity: '',
     invUnit: '個',
     expiryDate: '',
+    ingredientCategory: 'その他',
   };
 }
 
@@ -136,6 +141,7 @@ export function PurchaseFormSheet({ onClose, carriedItems }: PurchaseFormSheetPr
             unit: invUnit || '個',
             quantity: Number.isFinite(qty) && qty > 0 ? qty : 1,
             expiryDate: r.category === '食品' ? r.expiryDate || undefined : undefined,
+            category: r.category === '食品' ? r.ingredientCategory : undefined,
           };
         });
 
@@ -320,18 +326,36 @@ export function PurchaseFormSheet({ onClose, carriedItems }: PurchaseFormSheetPr
                       </div>
                     )}
                     {row.category === '食品' && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span className="text-muted" style={{ fontSize: 12 }}>
-                          期限
-                        </span>
-                        <input
-                          className="input"
-                          type="date"
-                          style={{ flex: 1, padding: '8px 10px' }}
-                          value={row.expiryDate}
-                          onChange={(e) => updateRow(row.id, { expiryDate: e.target.value })}
-                        />
-                      </div>
+                      <>
+                        <div style={{ marginBottom: 8 }}>
+                          <span className="text-muted" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
+                            食材カテゴリ
+                          </span>
+                          <div className="chip-row">
+                            {INGREDIENT_CATEGORIES.map((c) => (
+                              <button
+                                key={c}
+                                className={`chip${row.ingredientCategory === c ? ' active' : ''}`}
+                                onClick={() => updateRow(row.id, { ingredientCategory: c })}
+                              >
+                                {c}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span className="text-muted" style={{ fontSize: 12 }}>
+                            期限
+                          </span>
+                          <input
+                            className="input"
+                            type="date"
+                            style={{ flex: 1, padding: '8px 10px' }}
+                            value={row.expiryDate}
+                            onChange={(e) => updateRow(row.id, { expiryDate: e.target.value })}
+                          />
+                        </div>
+                      </>
                     )}
                   </div>
                 )}

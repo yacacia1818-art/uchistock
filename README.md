@@ -1,3 +1,9 @@
+# ウチストック
+
+食品・日用品の在庫と食費を一括管理する個人用ローカルアプリ（旧称：メシログ）。React + TypeScript + Vite + IndexedDB（`idb`）で構築され、バックエンドを持たず完全にブラウザ内で動作する。
+
+---
+
 # React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.

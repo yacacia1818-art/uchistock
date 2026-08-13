@@ -141,8 +141,8 @@ export function Home() {
   return (
     <>
       <Header
-        icon={<span style={{ fontSize: 22 }}>🍙</span>}
-        title="メシログ"
+        icon={<span style={{ fontSize: 22 }}>📦</span>}
+        title="ウチストック"
         subtitle={formatDateLabel(todayDateStr())}
         actions={
           <button

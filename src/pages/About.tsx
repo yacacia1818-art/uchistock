@@ -16,7 +16,7 @@ export function About() {
       />
       <div className="page-content">
         <div className="card mb-16">
-          <div className="section-title">🍙 メシログとは</div>
+          <div className="section-title">📦 ウチストックとは</div>
           <p style={{ fontSize: 14, lineHeight: 1.8 }}>
             食費・食材・食事を、できるだけ少ない入力で管理する個人用アプリです。
             細かい家計簿ではなく、「今月あといくら使えるか」「家に何があるか」「最近何を食べたか」

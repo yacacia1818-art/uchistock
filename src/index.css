@@ -564,6 +564,15 @@ button {
   background: var(--color-secondary);
   box-shadow: var(--shadow-pop);
 }
+.fab.soft {
+  background: var(--color-primary-soft);
+  color: var(--color-primary-dark);
+}
+.fab.outline {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+}
 
 .link-row {
   display: flex;

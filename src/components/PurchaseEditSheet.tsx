@@ -7,9 +7,10 @@ import { notifyDataChanged } from '../utils/bus';
 import { toUserMessage } from '../utils/errors';
 import { generateId } from '../utils/id';
 import { UNIT_OPTIONS } from '../types';
-import type { IngredientCategory, Purchase, ShoppingCategory } from '../types';
+import type { HouseholdCategory, IngredientCategory, Purchase, ShoppingCategory } from '../types';
 
 const INGREDIENT_CATEGORIES: IngredientCategory[] = ['野菜', '肉・魚', '卵・乳製品', '主食', 'その他'];
+const HOUSEHOLD_CATEGORIES: HouseholdCategory[] = ['洗剤・掃除用品', '衛生用品', '薬・医薬品', '文房具・雑貨', 'その他'];
 
 interface PurchaseEditSheetProps {
   purchase: Purchase;
@@ -194,7 +195,7 @@ export function PurchaseEditSheet({ purchase, onClose, onSaved }: PurchaseEditSh
                     <button
                       key={c}
                       className={`chip${row.category === c ? ' active' : ''}`}
-                      onClick={() => updateRow(row.id, { category: c })}
+                      onClick={() => updateRow(row.id, { category: c, ingredientCategory: 'その他' })}
                     >
                       {c}
                     </button>
@@ -288,37 +289,35 @@ export function PurchaseEditSheet({ purchase, onClose, onSaved }: PurchaseEditSh
                         </select>
                       </div>
                     )}
+                    <div style={{ marginBottom: row.category === '食品' ? 8 : 0 }}>
+                      <span className="text-muted" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
+                        {row.category === '食品' ? '食材カテゴリ' : '日用品カテゴリ'}
+                      </span>
+                      <div className="chip-row">
+                        {(row.category === '食品' ? INGREDIENT_CATEGORIES : HOUSEHOLD_CATEGORIES).map((c) => (
+                          <button
+                            key={c}
+                            className={`chip${row.ingredientCategory === c ? ' active' : ''}`}
+                            onClick={() => updateRow(row.id, { ingredientCategory: c })}
+                          >
+                            {c}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                     {row.category === '食品' && (
-                      <>
-                        <div style={{ marginBottom: 8 }}>
-                          <span className="text-muted" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
-                            食材カテゴリ
-                          </span>
-                          <div className="chip-row">
-                            {INGREDIENT_CATEGORIES.map((c) => (
-                              <button
-                                key={c}
-                                className={`chip${row.ingredientCategory === c ? ' active' : ''}`}
-                                onClick={() => updateRow(row.id, { ingredientCategory: c })}
-                              >
-                                {c}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span className="text-muted" style={{ fontSize: 12 }}>
-                            期限
-                          </span>
-                          <input
-                            className="input"
-                            type="date"
-                            style={{ flex: 1, padding: '8px 10px' }}
-                            value={row.expiryDate}
-                            onChange={(e) => updateRow(row.id, { expiryDate: e.target.value })}
-                          />
-                        </div>
-                      </>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span className="text-muted" style={{ fontSize: 12 }}>
+                          期限
+                        </span>
+                        <input
+                          className="input"
+                          type="date"
+                          style={{ flex: 1, padding: '8px 10px' }}
+                          value={row.expiryDate}
+                          onChange={(e) => updateRow(row.id, { expiryDate: e.target.value })}
+                        />
+                      </div>
                     )}
                   </div>
                 )}

@@ -8,9 +8,10 @@ import { toUserMessage } from '../utils/errors';
 import { parseMemoQuantity } from '../utils/quantity';
 import { generateId } from '../utils/id';
 import { UNIT_OPTIONS } from '../types';
-import type { IngredientCategory, ShoppingCategory, ShoppingMemoItem } from '../types';
+import type { HouseholdCategory, IngredientCategory, ShoppingCategory, ShoppingMemoItem } from '../types';
 
 const INGREDIENT_CATEGORIES: IngredientCategory[] = ['野菜', '肉・魚', '卵・乳製品', '主食', 'その他'];
+const HOUSEHOLD_CATEGORIES: HouseholdCategory[] = ['洗剤・掃除用品', '衛生用品', '薬・医薬品', '文房具・雑貨', 'その他'];
 
 interface PurchaseFormSheetProps {
   onClose: () => void;
@@ -29,7 +30,7 @@ interface PurchaseRow {
   invQuantity: string;
   invUnit: string;
   expiryDate: string;
-  ingredientCategory: IngredientCategory;
+  ingredientCategory: IngredientCategory | HouseholdCategory;
 }
 
 function buildRowFromMemoItem(item: ShoppingMemoItem): PurchaseRow {
@@ -45,7 +46,7 @@ function buildRowFromMemoItem(item: ShoppingMemoItem): PurchaseRow {
     quantity: String(quantity),
     unit,
     price: '',
-    addToInventory: category === '食品',
+    addToInventory: true,
     convertUnit: false,
     invQuantity: String(quantity),
     invUnit: unit,
@@ -141,7 +142,8 @@ export function PurchaseFormSheet({ onClose, carriedItems }: PurchaseFormSheetPr
             unit: invUnit || '個',
             quantity: Number.isFinite(qty) && qty > 0 ? qty : 1,
             expiryDate: r.category === '食品' ? r.expiryDate || undefined : undefined,
-            category: r.category === '食品' ? r.ingredientCategory : undefined,
+            category: r.ingredientCategory,
+            itemType: r.category,
           };
         });
 
@@ -231,7 +233,7 @@ export function PurchaseFormSheet({ onClose, carriedItems }: PurchaseFormSheetPr
                     <button
                       key={c}
                       className={`chip${row.category === c ? ' active' : ''}`}
-                      onClick={() => updateRow(row.id, { category: c, addToInventory: c === '食品' })}
+                      onClick={() => updateRow(row.id, { category: c, ingredientCategory: 'その他' })}
                     >
                       {c}
                     </button>
@@ -325,37 +327,35 @@ export function PurchaseFormSheet({ onClose, carriedItems }: PurchaseFormSheetPr
                         </select>
                       </div>
                     )}
+                    <div style={{ marginBottom: row.category === '食品' ? 8 : 0 }}>
+                      <span className="text-muted" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
+                        {row.category === '食品' ? '食材カテゴリ' : '日用品カテゴリ'}
+                      </span>
+                      <div className="chip-row">
+                        {(row.category === '食品' ? INGREDIENT_CATEGORIES : HOUSEHOLD_CATEGORIES).map((c) => (
+                          <button
+                            key={c}
+                            className={`chip${row.ingredientCategory === c ? ' active' : ''}`}
+                            onClick={() => updateRow(row.id, { ingredientCategory: c })}
+                          >
+                            {c}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                     {row.category === '食品' && (
-                      <>
-                        <div style={{ marginBottom: 8 }}>
-                          <span className="text-muted" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
-                            食材カテゴリ
-                          </span>
-                          <div className="chip-row">
-                            {INGREDIENT_CATEGORIES.map((c) => (
-                              <button
-                                key={c}
-                                className={`chip${row.ingredientCategory === c ? ' active' : ''}`}
-                                onClick={() => updateRow(row.id, { ingredientCategory: c })}
-                              >
-                                {c}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span className="text-muted" style={{ fontSize: 12 }}>
-                            期限
-                          </span>
-                          <input
-                            className="input"
-                            type="date"
-                            style={{ flex: 1, padding: '8px 10px' }}
-                            value={row.expiryDate}
-                            onChange={(e) => updateRow(row.id, { expiryDate: e.target.value })}
-                          />
-                        </div>
-                      </>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span className="text-muted" style={{ fontSize: 12 }}>
+                          期限
+                        </span>
+                        <input
+                          className="input"
+                          type="date"
+                          style={{ flex: 1, padding: '8px 10px' }}
+                          value={row.expiryDate}
+                          onChange={(e) => updateRow(row.id, { expiryDate: e.target.value })}
+                        />
+                      </div>
                     )}
                   </div>
                 )}
@@ -367,7 +367,7 @@ export function PurchaseFormSheet({ onClose, carriedItems }: PurchaseFormSheetPr
           <Plus size={16} /> 商品を追加
         </button>
         <p className="text-muted mt-8" style={{ fontSize: 12 }}>
-          ※ 商品を追加しなくても合計金額だけで保存できます。日用品は在庫追加が初期状態でOFFです。
+          ※ 商品を追加しなくても合計金額だけで保存できます。食品・日用品どちらも在庫へ反映できます。
         </p>
       </div>
 

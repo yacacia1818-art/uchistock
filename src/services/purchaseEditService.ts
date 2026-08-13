@@ -7,7 +7,14 @@ import {
 } from '../repositories/ingredientRepo';
 import { generateId } from '../utils/id';
 import { AppError } from '../utils/errors';
-import type { IngredientCategory, InventoryAddition, Purchase, PurchaseItem, ShoppingCategory } from '../types';
+import type {
+  HouseholdCategory,
+  IngredientCategory,
+  InventoryAddition,
+  Purchase,
+  PurchaseItem,
+  ShoppingCategory,
+} from '../types';
 
 export interface EditableItemRow {
   id: string;
@@ -21,8 +28,8 @@ export interface EditableItemRow {
   convertUnit: boolean;
   invQuantity: string;
   invUnit: string;
-  // v1.3: 在庫作成時の食材カテゴリ（食品のみ意味を持つ）
-  ingredientCategory: IngredientCategory;
+  // v1.3: 在庫作成時のカテゴリ（category==='食品'ならIngredientCategory、'日用品'ならHouseholdCategory）
+  ingredientCategory: IngredientCategory | HouseholdCategory;
 }
 
 interface UpdatePurchaseWithInventoryInput {
@@ -123,25 +130,26 @@ export async function updatePurchaseWithInventory(
 
     const prior = priorByItemId.get(rowId) || priorByName.get(name);
     const ingredientCategory = row.ingredientCategory ?? 'その他';
+    const itemType = row.category;
 
     if (!prior) {
       // 新規追加（後から追加した商品、または今回はじめて在庫追加をONにした商品）
-      await addOrMergeIngredient(name, invUnit, newQty, ingredientCategory, expiryDate);
-      newInventoryAdditions.push({ itemId: rowId, name, unit: invUnit, quantity: newQty, expiryDate, category: ingredientCategory });
+      await addOrMergeIngredient(name, invUnit, newQty, ingredientCategory, expiryDate, itemType);
+      newInventoryAdditions.push({ itemId: rowId, name, unit: invUnit, quantity: newQty, expiryDate, category: ingredientCategory, itemType });
       continue;
     }
 
     if (prior.unit !== invUnit) {
       // 単位が変わった場合は差分計算をせず新規追加として扱う（以前反映した分はそのまま残す）
-      await addOrMergeIngredient(name, invUnit, newQty, ingredientCategory, expiryDate);
-      newInventoryAdditions.push({ itemId: rowId, name, unit: invUnit, quantity: newQty, expiryDate, category: ingredientCategory });
+      await addOrMergeIngredient(name, invUnit, newQty, ingredientCategory, expiryDate, itemType);
+      newInventoryAdditions.push({ itemId: rowId, name, unit: invUnit, quantity: newQty, expiryDate, category: ingredientCategory, itemType });
       continue;
     }
 
     const delta = Math.round((newQty - prior.quantity) * 10000) / 10000;
     if (delta > 0) {
-      await addOrMergeIngredient(name, invUnit, delta, ingredientCategory, expiryDate);
-      newInventoryAdditions.push({ itemId: rowId, name, unit: invUnit, quantity: newQty, expiryDate, category: ingredientCategory });
+      await addOrMergeIngredient(name, invUnit, delta, ingredientCategory, expiryDate, itemType);
+      newInventoryAdditions.push({ itemId: rowId, name, unit: invUnit, quantity: newQty, expiryDate, category: ingredientCategory, itemType });
     } else if (delta < 0) {
       const current = await findIngredientByNameUnit(name, invUnit);
       if (current && current.quantity >= Math.abs(delta) - 1e-9) {

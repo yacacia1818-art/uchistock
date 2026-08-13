@@ -7,7 +7,7 @@ import { toUserMessage } from '../utils/errors';
 import { formatQuantity } from '../utils/quantity';
 import { formatExpiryRelative, daysUntil, getEarliestExpiry } from '../utils/expiry';
 import { expiryUrgency, expiryUrgencyIcon, expiryUrgencyStyle } from '../utils/expiryUi';
-import { INGREDIENT_CATEGORY_EMOJI } from '../utils/categoryEmoji';
+import { categoryEmojiFor } from '../utils/categoryEmoji';
 import { formatDateLabel } from '../utils/date';
 
 interface IngredientRowProps {
@@ -52,7 +52,7 @@ export function IngredientRow({ ingredient, onEdit }: IngredientRowProps) {
 
   return (
     <div className="list-row" style={{ flexWrap: 'wrap', rowGap: 10 }}>
-      <div className="row-emoji">{INGREDIENT_CATEGORY_EMOJI[ingredient.category] ?? '🍽️'}</div>
+      <div className="row-emoji">{categoryEmojiFor(ingredient)}</div>
       <button
         className="row-main"
         onClick={() => onEdit(ingredient)}
@@ -70,15 +70,16 @@ export function IngredientRow({ ingredient, onEdit }: IngredientRowProps) {
         <div className="row-title">{ingredient.name}</div>
         <div className="row-sub">
           {ingredient.category}
-          {earliestExpiry && urgency ? (
-            <span style={expiryUrgencyStyle(urgency)}>
-              {' '}
-              ・{expiryUrgencyIcon(urgency)}
-              {formatDateLabel(earliestExpiry).replace(/（.*）/, '')}まで（{formatExpiryRelative(days!)}）
-            </span>
-          ) : (
-            <span> ・期限未設定</span>
-          )}
+          {ingredient.itemType !== '日用品' &&
+            (earliestExpiry && urgency ? (
+              <span style={expiryUrgencyStyle(urgency)}>
+                {' '}
+                ・{expiryUrgencyIcon(urgency)}
+                {formatDateLabel(earliestExpiry).replace(/（.*）/, '')}まで（{formatExpiryRelative(days!)}）
+              </span>
+            ) : (
+              <span> ・期限未設定</span>
+            ))}
         </div>
       </button>
       <button

@@ -97,7 +97,8 @@ export async function addOrMergeIngredient(
   unit: string,
   quantity: number,
   category: Ingredient['category'] = 'その他',
-  expiryDate?: string
+  expiryDate?: string,
+  itemType: Ingredient['itemType'] = '食品'
 ): Promise<Ingredient> {
   try {
     const db = await getDB();
@@ -134,6 +135,7 @@ export async function addOrMergeIngredient(
       quantity,
       expiryDate,
       expiryBatches: expiryDate ? [{ date: expiryDate, quantity }] : undefined,
+      itemType,
       createdAt: now,
       updatedAt: now,
     };

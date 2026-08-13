@@ -17,16 +17,11 @@ import { useToast } from '../components/ToastProvider';
 import { notifyDataChanged } from '../utils/bus';
 import { toUserMessage } from '../utils/errors';
 import { formatMemoQuantity } from '../utils/quantity';
-import type { Ingredient, IngredientCategory, ShoppingMemoItem } from '../types';
+import type { HouseholdCategory, Ingredient, IngredientCategory, ShoppingCategory, ShoppingMemoItem } from '../types';
 
-const CATEGORIES: (IngredientCategory | 'すべて')[] = [
-  'すべて',
-  '野菜',
-  '肉・魚',
-  '卵・乳製品',
-  '主食',
-  'その他',
-];
+const FOOD_CATEGORIES: IngredientCategory[] = ['野菜', '肉・魚', '卵・乳製品', '主食', 'その他'];
+const HOUSEHOLD_CATEGORIES: HouseholdCategory[] = ['洗剤・掃除用品', '衛生用品', '薬・医薬品', '文房具・雑貨', 'その他'];
+const ITEM_TYPES: (ShoppingCategory | 'すべて')[] = ['すべて', '食品', '日用品'];
 
 export function Ingredients() {
   const { showToast } = useToast();
@@ -35,7 +30,8 @@ export function Ingredients() {
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [memo, setMemo] = useState<ShoppingMemoItem[]>([]);
   const [search, setSearch] = useState('');
-  const [category, setCategory] = useState<IngredientCategory | 'すべて'>('すべて');
+  const [itemType, setItemType] = useState<ShoppingCategory | 'すべて'>('すべて');
+  const [category, setCategory] = useState<IngredientCategory | HouseholdCategory | 'すべて'>('すべて');
   const [showAddIngredient, setShowAddIngredient] = useState(false);
   const [editingIngredient, setEditingIngredient] = useState<Ingredient | null>(null);
   const [showAddMemoOpen, setShowAddMemoOpen] = useState(false);
@@ -50,13 +46,23 @@ export function Ingredients() {
       .catch((e) => showToast(toUserMessage(e, 'データの読み込みに失敗しました')));
   }, [version, showToast]);
 
+  function handleItemTypeChange(next: ShoppingCategory | 'すべて') {
+    setItemType(next);
+    setCategory('すべて');
+  }
+
+  const categoryOptions =
+    itemType === '日用品' ? HOUSEHOLD_CATEGORIES : itemType === '食品' ? FOOD_CATEGORIES : [];
+
   const filteredIngredients = useMemo(() => {
     return ingredients.filter((i) => {
+      const type = i.itemType ?? '食品';
+      if (itemType !== 'すべて' && type !== itemType) return false;
       if (category !== 'すべて' && i.category !== category) return false;
       if (search.trim() && !i.name.includes(search.trim())) return false;
       return true;
     });
-  }, [ingredients, category, search]);
+  }, [ingredients, itemType, category, search]);
 
   const uncheckedMemo = memo.filter((m) => !m.checked);
   const checkedMemo = memo.filter((m) => m.checked);
@@ -84,11 +90,11 @@ export function Ingredients() {
     <>
       <Header
         icon={<Package size={20} />}
-        title="食材"
+        title="在庫"
         actions={
           tab === 'inventory' ? (
             <button className="btn btn-primary btn-sm" onClick={() => setShowAddIngredient(true)}>
-              <Plus size={16} /> 食材を追加
+              <Plus size={16} /> 在庫を追加
             </button>
           ) : (
             <button className="btn btn-primary btn-sm" onClick={() => setShowAddMemoOpen(true)}>
@@ -114,25 +120,38 @@ export function Ingredients() {
               <Search size={16} className="search-icon" />
               <input
                 className="input"
-                placeholder="食材を検索"
+                placeholder="在庫を検索"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
             <div className="chip-row">
-              {CATEGORIES.map((c) => (
+              {ITEM_TYPES.map((t) => (
                 <button
-                  key={c}
-                  className={`chip${category === c ? ' active' : ''}`}
-                  onClick={() => setCategory(c)}
+                  key={t}
+                  className={`chip${itemType === t ? ' active' : ''}`}
+                  onClick={() => handleItemTypeChange(t)}
                 >
-                  {c}
+                  {t}
                 </button>
               ))}
             </div>
+            {categoryOptions.length > 0 && (
+              <div className="chip-row">
+                {(['すべて', ...categoryOptions] as const).map((c) => (
+                  <button
+                    key={c}
+                    className={`chip${category === c ? ' active' : ''}`}
+                    onClick={() => setCategory(c)}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="card">
               {filteredIngredients.length === 0 ? (
-                <div className="empty-state">まだ食材が登録されていません</div>
+                <div className="empty-state">まだ在庫が登録されていません</div>
               ) : (
                 filteredIngredients.map((i) => (
                   <IngredientRow key={i.id} ingredient={i} onEdit={(ing) => setEditingIngredient(ing)} />

@@ -2,6 +2,8 @@
 
 export type IngredientCategory = '野菜' | '肉・魚' | '卵・乳製品' | '主食' | 'その他';
 
+export type HouseholdCategory = '洗剤・掃除用品' | '衛生用品' | '薬・医薬品' | '文房具・雑貨' | 'その他';
+
 // v1.0レガシー（マイグレーションで新フィールドへ変換。後方互換のため残置）
 export type TrackType = 'count' | 'rough';
 export type RoughLevel = '多い' | '半分' | '少ない' | 'なし';
@@ -18,7 +20,7 @@ export interface ExpiryBatch {
 export interface Ingredient {
   id: string;
   name: string;
-  category: IngredientCategory;
+  category: IngredientCategory | HouseholdCategory;
   unit: string; // 個・本・パック・袋・玉・枚・食・その他（自由入力可）
   quantity: number; // 個数・本数・パック数（パック等は小数を許容し、使用割合を反映）
   createdAt: string;
@@ -31,6 +33,8 @@ export interface Ingredient {
   expiryDate?: string; // YYYY-MM-DD
   // 期限ごとの数量履歴（カレンダー等で古い期限も参照するため非破壊で保持）
   expiryBatches?: ExpiryBatch[];
+  // v1.4: 食品/日用品の区分。未設定の既存データは食品として扱う
+  itemType?: ShoppingCategory;
 }
 
 export type ShoppingCategory = '食品' | '日用品';
@@ -65,7 +69,9 @@ export interface InventoryAddition {
   quantity: number;
   expiryDate?: string; // YYYY-MM-DD
   // v1.3: 在庫作成時のカテゴリ（任意・新規作成時のみ使用。既存食材のカテゴリは上書きしない）
-  category?: IngredientCategory;
+  category?: IngredientCategory | HouseholdCategory;
+  // v1.4: 食品/日用品の区分（任意・新規作成時のみ使用。未設定は食品として扱う）
+  itemType?: ShoppingCategory;
 }
 
 export interface Purchase {

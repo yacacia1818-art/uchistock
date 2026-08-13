@@ -5,9 +5,10 @@ import { useToast } from './ToastProvider';
 import { notifyDataChanged } from '../utils/bus';
 import { toUserMessage } from '../utils/errors';
 import { UNIT_OPTIONS } from '../types';
-import type { IngredientCategory } from '../types';
+import type { HouseholdCategory, IngredientCategory, ShoppingCategory } from '../types';
 
-const CATEGORIES: IngredientCategory[] = ['野菜', '肉・魚', '卵・乳製品', '主食', 'その他'];
+const FOOD_CATEGORIES: IngredientCategory[] = ['野菜', '肉・魚', '卵・乳製品', '主食', 'その他'];
+const HOUSEHOLD_CATEGORIES: HouseholdCategory[] = ['洗剤・掃除用品', '衛生用品', '薬・医薬品', '文房具・雑貨', 'その他'];
 
 interface AddIngredientSheetProps {
   onClose: () => void;
@@ -16,18 +17,25 @@ interface AddIngredientSheetProps {
 export function AddIngredientSheet({ onClose }: AddIngredientSheetProps) {
   const { showToast } = useToast();
   const [name, setName] = useState('');
-  const [category, setCategory] = useState<IngredientCategory>('その他');
+  const [itemType, setItemType] = useState<ShoppingCategory>('食品');
+  const [category, setCategory] = useState<IngredientCategory | HouseholdCategory>('その他');
   const [unit, setUnit] = useState<string>('個');
   const [customUnit, setCustomUnit] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [expiryDate, setExpiryDate] = useState('');
   const [saving, setSaving] = useState(false);
 
+  const categories = itemType === '食品' ? FOOD_CATEGORIES : HOUSEHOLD_CATEGORIES;
   const resolvedUnit = unit === 'その他' ? customUnit.trim() || 'その他' : unit;
+
+  function handleItemTypeChange(next: ShoppingCategory) {
+    setItemType(next);
+    setCategory('その他');
+  }
 
   async function handleSave() {
     if (!name.trim()) {
-      showToast('食材名を入力してください');
+      showToast('名前を入力してください');
       return;
     }
     setSaving(true);
@@ -35,13 +43,14 @@ export function AddIngredientSheet({ onClose }: AddIngredientSheetProps) {
       await addIngredient({
         name: name.trim(),
         category,
+        itemType,
         unit: resolvedUnit,
         quantity,
-        expiryDate: expiryDate || undefined,
-        expiryBatches: expiryDate ? [{ date: expiryDate, quantity }] : undefined,
+        expiryDate: itemType === '食品' && expiryDate ? expiryDate : undefined,
+        expiryBatches: itemType === '食品' && expiryDate ? [{ date: expiryDate, quantity }] : undefined,
       });
       notifyDataChanged();
-      showToast('食材を追加しました');
+      showToast('在庫に追加しました');
       onClose();
     } catch (e) {
       showToast(toUserMessage(e, '保存に失敗しました'));
@@ -51,16 +60,31 @@ export function AddIngredientSheet({ onClose }: AddIngredientSheetProps) {
   }
 
   return (
-    <BottomSheet title="食材を追加" onClose={onClose}>
+    <BottomSheet title="在庫を追加" onClose={onClose}>
       <div className="field">
-        <label>食材名（必須）</label>
+        <label>区分</label>
+        <div className="chip-row">
+          {(['食品', '日用品'] as ShoppingCategory[]).map((t) => (
+            <button
+              key={t}
+              className={`chip${itemType === t ? ' active' : ''}`}
+              onClick={() => handleItemTypeChange(t)}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="field">
+        <label>名前（必須）</label>
         <input className="input" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
       </div>
 
       <div className="field">
         <label>カテゴリ</label>
         <div className="chip-row">
-          {CATEGORIES.map((c) => (
+          {categories.map((c) => (
             <button
               key={c}
               className={`chip${category === c ? ' active' : ''}`}
@@ -103,15 +127,17 @@ export function AddIngredientSheet({ onClose }: AddIngredientSheetProps) {
         </div>
       </div>
 
-      <div className="field">
-        <label>期限（任意）</label>
-        <input
-          className="input"
-          type="date"
-          value={expiryDate}
-          onChange={(e) => setExpiryDate(e.target.value)}
-        />
-      </div>
+      {itemType === '食品' && (
+        <div className="field">
+          <label>期限（任意）</label>
+          <input
+            className="input"
+            type="date"
+            value={expiryDate}
+            onChange={(e) => setExpiryDate(e.target.value)}
+          />
+        </div>
+      )}
 
       <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
         追加する

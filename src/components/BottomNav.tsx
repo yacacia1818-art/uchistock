@@ -3,7 +3,7 @@ import { Home, Package, ClipboardList, MoreHorizontal } from 'lucide-react';
 
 const items = [
   { to: '/', label: 'ホーム', icon: Home, end: true },
-  { to: '/ingredients', label: '食材', icon: Package, end: false },
+  { to: '/ingredients', label: '在庫', icon: Package, end: false },
   { to: '/records', label: '記録', icon: ClipboardList, end: false },
   { to: '/more', label: 'その他', icon: MoreHorizontal, end: false },
 ];

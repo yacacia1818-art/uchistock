@@ -49,7 +49,8 @@ export async function recordPurchase(input: RecordPurchaseInput): Promise<Purcha
         addition.unit,
         addition.quantity,
         addition.category ?? 'その他',
-        addition.expiryDate
+        addition.expiryDate,
+        addition.itemType ?? '食品'
       );
     }
   }

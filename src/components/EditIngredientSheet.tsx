@@ -6,9 +6,10 @@ import { notifyDataChanged } from '../utils/bus';
 import { toUserMessage } from '../utils/errors';
 import { getEarliestExpiry } from '../utils/expiry';
 import { UNIT_OPTIONS } from '../types';
-import type { Ingredient, IngredientCategory } from '../types';
+import type { HouseholdCategory, Ingredient, IngredientCategory, ShoppingCategory } from '../types';
 
-const CATEGORIES: IngredientCategory[] = ['野菜', '肉・魚', '卵・乳製品', '主食', 'その他'];
+const FOOD_CATEGORIES: IngredientCategory[] = ['野菜', '肉・魚', '卵・乳製品', '主食', 'その他'];
+const HOUSEHOLD_CATEGORIES: HouseholdCategory[] = ['洗剤・掃除用品', '衛生用品', '薬・医薬品', '文房具・雑貨', 'その他'];
 
 interface EditIngredientSheetProps {
   ingredient: Ingredient;
@@ -20,18 +21,25 @@ export function EditIngredientSheet({ ingredient, onClose }: EditIngredientSheet
   const initialExpiry = getEarliestExpiry(ingredient) ?? '';
   const isKnownUnit = (UNIT_OPTIONS as readonly string[]).includes(ingredient.unit);
   const [name, setName] = useState(ingredient.name);
-  const [category, setCategory] = useState<IngredientCategory>(ingredient.category);
+  const [itemType, setItemType] = useState<ShoppingCategory>(ingredient.itemType ?? '食品');
+  const [category, setCategory] = useState<IngredientCategory | HouseholdCategory>(ingredient.category);
   const [unit, setUnit] = useState<string>(isKnownUnit ? ingredient.unit : 'その他');
   const [customUnit, setCustomUnit] = useState(isKnownUnit ? '' : ingredient.unit);
   const [quantity, setQuantity] = useState(ingredient.quantity);
   const [expiryDate, setExpiryDate] = useState(initialExpiry);
   const [saving, setSaving] = useState(false);
 
+  const categories = itemType === '食品' ? FOOD_CATEGORIES : HOUSEHOLD_CATEGORIES;
   const resolvedUnit = unit === 'その他' ? customUnit.trim() || 'その他' : unit;
+
+  function handleItemTypeChange(next: ShoppingCategory) {
+    setItemType(next);
+    setCategory('その他');
+  }
 
   async function handleSave() {
     if (!name.trim()) {
-      showToast('食材名を入力してください');
+      showToast('名前を入力してください');
       return;
     }
     setSaving(true);
@@ -41,18 +49,21 @@ export function EditIngredientSheet({ ingredient, onClose }: EditIngredientSheet
         ...ingredient,
         name: name.trim(),
         category,
+        itemType,
         unit: resolvedUnit,
         quantity: Math.max(0, quantity),
-        // 期限を変更した場合のみバッチも入れ替える。未変更なら既存のexpiryBatches（複数購入分の履歴）はそのまま保持する
-        ...(expiryChanged
-          ? {
-              expiryDate: expiryDate || undefined,
-              expiryBatches: expiryDate ? [{ date: expiryDate, quantity: Math.max(0, quantity) }] : undefined,
-            }
-          : {}),
+        // 日用品には期限概念がないため、区分を日用品に変えた場合は期限情報をクリアする
+        ...(itemType === '日用品'
+          ? { expiryDate: undefined, expiryBatches: undefined }
+          : expiryChanged
+            ? {
+                expiryDate: expiryDate || undefined,
+                expiryBatches: expiryDate ? [{ date: expiryDate, quantity: Math.max(0, quantity) }] : undefined,
+              }
+            : {}),
       });
       notifyDataChanged();
-      showToast('食材を更新しました');
+      showToast('在庫を更新しました');
       onClose();
     } catch (e) {
       showToast(toUserMessage(e, '更新に失敗しました'));
@@ -62,16 +73,31 @@ export function EditIngredientSheet({ ingredient, onClose }: EditIngredientSheet
   }
 
   return (
-    <BottomSheet title="食材を編集" onClose={onClose}>
+    <BottomSheet title="在庫を編集" onClose={onClose}>
       <div className="field">
-        <label>食材名（必須）</label>
+        <label>区分</label>
+        <div className="chip-row">
+          {(['食品', '日用品'] as ShoppingCategory[]).map((t) => (
+            <button
+              key={t}
+              className={`chip${itemType === t ? ' active' : ''}`}
+              onClick={() => handleItemTypeChange(t)}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="field">
+        <label>名前（必須）</label>
         <input className="input" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
       </div>
 
       <div className="field">
         <label>カテゴリ</label>
         <div className="chip-row">
-          {CATEGORIES.map((c) => (
+          {categories.map((c) => (
             <button
               key={c}
               className={`chip${category === c ? ' active' : ''}`}
@@ -114,18 +140,20 @@ export function EditIngredientSheet({ ingredient, onClose }: EditIngredientSheet
         </div>
       </div>
 
-      <div className="field">
-        <label>期限（任意）</label>
-        <input
-          className="input"
-          type="date"
-          value={expiryDate}
-          onChange={(e) => setExpiryDate(e.target.value)}
-        />
-        <p className="text-muted mt-8" style={{ fontSize: 12 }}>
-          ※ 期限を変更すると、購入ごとの期限履歴は今回入力した1件にまとめられます。変更しなければ既存の履歴はそのまま残ります。
-        </p>
-      </div>
+      {itemType === '食品' && (
+        <div className="field">
+          <label>期限（任意）</label>
+          <input
+            className="input"
+            type="date"
+            value={expiryDate}
+            onChange={(e) => setExpiryDate(e.target.value)}
+          />
+          <p className="text-muted mt-8" style={{ fontSize: 12 }}>
+            ※ 期限を変更すると、購入ごとの期限履歴は今回入力した1件にまとめられます。変更しなければ既存の履歴はそのまま残ります。
+          </p>
+        </div>
+      )}
 
       <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
         保存する

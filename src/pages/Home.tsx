@@ -225,7 +225,7 @@ export function Home() {
           {!mealTrackingEnabled && (
             <button className="fab orange" onClick={() => setShowAddIngredient(true)}>
               <Plus size={22} />
-              ＋ 食材を追加
+              ＋ 在庫を追加
               <span style={{ fontWeight: 500, fontSize: 11, opacity: 0.9 }}>在庫に直接追加</span>
             </button>
           )}
@@ -284,7 +284,7 @@ export function Home() {
 
         {!mealTrackingEnabled && (
           <div className="card mb-16">
-            <div className="section-title">🧺 現在の食材</div>
+            <div className="section-title">🧺 現在の在庫</div>
             <div style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 8 }}>
               {activeIngredientCount}種類
             </div>
@@ -310,7 +310,7 @@ export function Home() {
               </>
             )}
             <button className="btn btn-outline mt-8" onClick={() => navigate('/ingredients')}>
-              すべての食材を見る
+              すべての在庫を見る
             </button>
           </div>
         )}

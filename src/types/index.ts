@@ -11,6 +11,18 @@ export type RoughLevel = '多い' | '半分' | '少ない' | 'なし';
 export const UNIT_OPTIONS = ['個', '本', 'パック', '袋', '箱', '玉', '枚', '食', 'その他'] as const;
 export type UnitOption = (typeof UNIT_OPTIONS)[number];
 
+// v1.5: 数量の管理方式。品目ごとに実数管理（個数・本数）か4段階のざっくり管理かを選べる
+export type QuantityMode = 'exact' | 'rough';
+export const STOCK_LEVELS = ['たっぷり', '半分', '少し', '切れそう'] as const;
+export type StockLevel = (typeof STOCK_LEVELS)[number];
+// ざっくり管理の各段階に対応する目安数量（期限計算・記録画面での表示等、既存の数値ベースの処理と互換性を保つため）
+export const STOCK_LEVEL_QUANTITY: Record<StockLevel, number> = {
+  たっぷり: 3,
+  半分: 2,
+  少し: 1,
+  切れそう: 0.3,
+};
+
 // 期限バッチ：購入ごとの期限と数量を保持する（古い期限を失わないため）
 export interface ExpiryBatch {
   date: string; // YYYY-MM-DD
@@ -35,6 +47,10 @@ export interface Ingredient {
   expiryBatches?: ExpiryBatch[];
   // v1.4: 食品/日用品の区分。未設定の既存データは食品として扱う
   itemType?: ShoppingCategory;
+  // v1.5: 数量管理方式。未設定の既存データは実数管理として扱う
+  quantityMode?: QuantityMode;
+  // quantityMode==='rough'のときのみ意味を持つ。quantityは表示・互換性のためこの値から算出した目安数を保持する
+  stockLevel?: StockLevel;
 }
 
 export type ShoppingCategory = '食品' | '日用品';

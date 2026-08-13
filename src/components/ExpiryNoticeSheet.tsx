@@ -1,5 +1,5 @@
 import { BottomSheet } from './BottomSheet';
-import { formatQuantity } from '../utils/quantity';
+import { formatStock } from '../utils/quantity';
 import { formatExpiryRelative } from '../utils/expiry';
 import type { ExpiringIngredient } from '../services/expirySummary';
 
@@ -39,7 +39,7 @@ export function ExpiryNoticeSheet({ items, onClose }: ExpiryNoticeSheetProps) {
                 <div className="list-row" key={ingredient.id}>
                   <div className="row-main">
                     <div className="row-title">{ingredient.name}</div>
-                    <div className="row-sub">{formatQuantity(ingredient.quantity, ingredient.unit)}</div>
+                    <div className="row-sub">{formatStock(ingredient)}</div>
                   </div>
                 </div>
               ))}

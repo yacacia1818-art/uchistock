@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Ingredient, IngredientUsage, UsageAmount } from '../types';
-import { FRACTION_CHOICES, formatQuantity, getUsageMode, type UsageMode } from '../utils/quantity';
+import { FRACTION_CHOICES, formatQuantity, formatStock, getUsageMode, type UsageMode } from '../utils/quantity';
 
 interface IngredientUsageSelectorProps {
   ingredients: Ingredient[];
@@ -85,7 +85,7 @@ export function IngredientUsageSelector({ ingredients, value, onChange }: Ingred
                 <input type="checkbox" checked={!!selected} onChange={() => toggle(ingredient)} />
                 <span style={{ flex: 1 }}>{ingredient.name}</span>
                 <span className="text-muted" style={{ fontSize: 12 }}>
-                  在庫 {formatQuantity(ingredient.quantity, ingredient.unit)}
+                  在庫 {formatStock(ingredient)}
                 </span>
               </label>
               {selected && (

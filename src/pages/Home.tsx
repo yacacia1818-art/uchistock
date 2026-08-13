@@ -29,7 +29,7 @@ import { getCurrentPeriod, formatPeriodRangeLabel, remainingDaysInPeriod } from 
 import { formatExpiryRelative } from '../utils/expiry';
 import { expiryUrgency, expiryUrgencyIcon, expiryUrgencyStyle } from '../utils/expiryUi';
 import { addMonths, currentYearMonth, formatDateLabel, todayDateStr } from '../utils/date';
-import { formatQuantity } from '../utils/quantity';
+import { formatStock } from '../utils/quantity';
 import { useDataVersion } from '../hooks/useDataVersion';
 import { useMonthCalendarData } from '../hooks/useMonthCalendarData';
 import { useToast } from '../components/ToastProvider';
@@ -226,7 +226,7 @@ export function Home() {
             <button className="fab orange" onClick={() => setShowAddIngredient(true)}>
               <Plus size={22} />
               ＋ 在庫を追加
-              <span style={{ fontWeight: 500, fontSize: 11, opacity: 0.9 }}>在庫に直接追加</span>
+              <span style={{ fontWeight: 500, fontSize: 11, opacity: 0.9 }}>貰い物など、金額を記録しない場合</span>
             </button>
           )}
         </div>
@@ -298,7 +298,7 @@ export function Home() {
                   return (
                     <div className="link-row" key={ingredient.id}>
                       <span>
-                        {ingredient.name}　{formatQuantity(ingredient.quantity, ingredient.unit)}
+                        {ingredient.name}　{formatStock(ingredient)}
                       </span>
                       <span style={expiryUrgencyStyle(urgency)}>
                         {expiryUrgencyIcon(urgency)}
@@ -315,7 +315,14 @@ export function Home() {
           </div>
         )}
 
-        <div className="section-title">📅 カレンダー</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="section-title" style={{ marginBottom: 0 }}>
+            📅 カレンダー
+          </div>
+          <button className="btn-ghost btn btn-sm" onClick={() => navigate('/calendar')}>
+            詳しく見る <ChevronRight size={14} />
+          </button>
+        </div>
         <MonthCalendarCard
           ym={ym}
           onPrevMonth={() => setYm((prev) => addMonths(prev, -1))}
@@ -353,7 +360,7 @@ export function Home() {
                       {formatExpiryRelative(days)}
                     </span>
                     <span>
-                      {ingredient.name}　{formatQuantity(ingredient.quantity, ingredient.unit)}
+                      {ingredient.name}　{formatStock(ingredient)}
                     </span>
                   </div>
                 );

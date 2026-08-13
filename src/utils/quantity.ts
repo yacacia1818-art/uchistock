@@ -1,4 +1,4 @@
-import type { ShoppingMemoItem, UsageAmount } from '../types';
+import type { Ingredient, ShoppingMemoItem, UsageAmount } from '../types';
 import { formatFraction, snapToFraction, fractionToDecimal } from './fraction';
 
 // パック・袋・玉など「まとめ買いして少しずつ使う」単位（割合選択UIを使う）
@@ -36,6 +36,14 @@ export const FRACTION_CHOICES: { label: string; value: number | 'all' | 'custom'
 export function formatQuantity(quantity: number, unit: string): string {
   const safe = Math.max(0, quantity);
   return formatFraction(safe, unit);
+}
+
+// 在庫の残量表示：4段階管理の食材はラベル（たっぷり等）、実数管理の食材は数量を表示する
+export function formatStock(ingredient: Pick<Ingredient, 'quantity' | 'unit' | 'quantityMode' | 'stockLevel'>): string {
+  if (ingredient.quantityMode === 'rough' && ingredient.stockLevel) {
+    return ingredient.stockLevel;
+  }
+  return formatQuantity(ingredient.quantity, ingredient.unit);
 }
 
 // 浮動小数点誤差を防ぐため、分数として妥当な値へスナップしてから減算する

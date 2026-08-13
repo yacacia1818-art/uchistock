@@ -4,8 +4,8 @@ import { addIngredient } from '../repositories/ingredientRepo';
 import { useToast } from './ToastProvider';
 import { notifyDataChanged } from '../utils/bus';
 import { toUserMessage } from '../utils/errors';
-import { UNIT_OPTIONS } from '../types';
-import type { HouseholdCategory, IngredientCategory, ShoppingCategory } from '../types';
+import { STOCK_LEVELS, STOCK_LEVEL_QUANTITY, UNIT_OPTIONS } from '../types';
+import type { HouseholdCategory, IngredientCategory, QuantityMode, ShoppingCategory, StockLevel } from '../types';
 
 const FOOD_CATEGORIES: IngredientCategory[] = ['野菜', '肉・魚', '卵・乳製品', '主食', 'その他'];
 const HOUSEHOLD_CATEGORIES: HouseholdCategory[] = ['洗剤・掃除用品', '衛生用品', '薬・医薬品', '文房具・雑貨', 'その他'];
@@ -22,6 +22,8 @@ export function AddIngredientSheet({ onClose }: AddIngredientSheetProps) {
   const [unit, setUnit] = useState<string>('個');
   const [customUnit, setCustomUnit] = useState('');
   const [quantity, setQuantity] = useState(1);
+  const [quantityMode, setQuantityMode] = useState<QuantityMode>('exact');
+  const [stockLevel, setStockLevel] = useState<StockLevel>('たっぷり');
   const [expiryDate, setExpiryDate] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -45,7 +47,9 @@ export function AddIngredientSheet({ onClose }: AddIngredientSheetProps) {
         category,
         itemType,
         unit: resolvedUnit,
-        quantity,
+        quantity: quantityMode === 'rough' ? STOCK_LEVEL_QUANTITY[stockLevel] : quantity,
+        quantityMode,
+        stockLevel: quantityMode === 'rough' ? stockLevel : undefined,
         expiryDate: itemType === '食品' && expiryDate ? expiryDate : undefined,
         expiryBatches: itemType === '食品' && expiryDate ? [{ date: expiryDate, quantity }] : undefined,
       });
@@ -61,6 +65,9 @@ export function AddIngredientSheet({ onClose }: AddIngredientSheetProps) {
 
   return (
     <BottomSheet title="在庫を追加" onClose={onClose}>
+      <p className="text-muted mb-16" style={{ fontSize: 12 }}>
+        ※ ここでは金額を記録せず在庫だけ増やします。購入した商品を金額も記録したい場合は「買い物を記録」をご利用ください。
+      </p>
       <div className="field">
         <label>区分</label>
         <div className="chip-row">
@@ -116,16 +123,48 @@ export function AddIngredientSheet({ onClose }: AddIngredientSheetProps) {
       </div>
 
       <div className="field">
-        <label>数量</label>
-        <div className="stepper" style={{ justifyContent: 'space-between' }}>
-          <button onClick={() => setQuantity((q) => Math.max(0, q - 1))}>−</button>
-          <span>
-            {quantity}
-            {resolvedUnit}
-          </span>
-          <button onClick={() => setQuantity((q) => q + 1)}>＋</button>
+        <label>管理方式</label>
+        <div className="chip-row">
+          {(['exact', 'rough'] as QuantityMode[]).map((m) => (
+            <button
+              key={m}
+              className={`chip${quantityMode === m ? ' active' : ''}`}
+              onClick={() => setQuantityMode(m)}
+            >
+              {m === 'exact' ? '個数で管理' : 'ざっくり4段階'}
+            </button>
+          ))}
         </div>
       </div>
+
+      {quantityMode === 'exact' ? (
+        <div className="field">
+          <label>数量</label>
+          <div className="stepper" style={{ justifyContent: 'space-between' }}>
+            <button onClick={() => setQuantity((q) => Math.max(0, q - 1))}>−</button>
+            <span>
+              {quantity}
+              {resolvedUnit}
+            </span>
+            <button onClick={() => setQuantity((q) => q + 1)}>＋</button>
+          </div>
+        </div>
+      ) : (
+        <div className="field">
+          <label>残量の目安</label>
+          <div className="chip-row">
+            {STOCK_LEVELS.map((level) => (
+              <button
+                key={level}
+                className={`chip${stockLevel === level ? ' active' : ''}`}
+                onClick={() => setStockLevel(level)}
+              >
+                {level}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {itemType === '食品' && (
         <div className="field">

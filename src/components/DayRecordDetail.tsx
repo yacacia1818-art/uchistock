@@ -1,6 +1,6 @@
 import { formatDateLabel } from '../utils/date';
 import { mealContentLabel } from '../utils/mealDisplay';
-import { formatQuantity } from '../utils/quantity';
+import { formatQuantity, formatStock } from '../utils/quantity';
 import { foodPortionOf } from '../services/foodCost';
 import type { CookedDish, Ingredient, Meal, MealType, Purchase } from '../types';
 
@@ -49,7 +49,7 @@ export function DayRecordDetail({
                 <div className="link-row" key={ing.id}>
                   <span style={{ color: 'var(--color-danger)', fontWeight: 700 }}>期限</span>
                   <span>
-                    {ing.name}（{formatQuantity(ing.quantity, ing.unit)}）
+                    {ing.name}（{formatStock(ing)}）
                   </span>
                 </div>
               ))}

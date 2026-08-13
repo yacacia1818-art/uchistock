@@ -5,8 +5,8 @@ import { useToast } from './ToastProvider';
 import { notifyDataChanged } from '../utils/bus';
 import { toUserMessage } from '../utils/errors';
 import { getEarliestExpiry } from '../utils/expiry';
-import { UNIT_OPTIONS } from '../types';
-import type { HouseholdCategory, Ingredient, IngredientCategory, ShoppingCategory } from '../types';
+import { STOCK_LEVELS, STOCK_LEVEL_QUANTITY, UNIT_OPTIONS } from '../types';
+import type { HouseholdCategory, Ingredient, IngredientCategory, QuantityMode, ShoppingCategory, StockLevel } from '../types';
 
 const FOOD_CATEGORIES: IngredientCategory[] = ['野菜', '肉・魚', '卵・乳製品', '主食', 'その他'];
 const HOUSEHOLD_CATEGORIES: HouseholdCategory[] = ['洗剤・掃除用品', '衛生用品', '薬・医薬品', '文房具・雑貨', 'その他'];
@@ -26,6 +26,8 @@ export function EditIngredientSheet({ ingredient, onClose }: EditIngredientSheet
   const [unit, setUnit] = useState<string>(isKnownUnit ? ingredient.unit : 'その他');
   const [customUnit, setCustomUnit] = useState(isKnownUnit ? '' : ingredient.unit);
   const [quantity, setQuantity] = useState(ingredient.quantity);
+  const [quantityMode, setQuantityMode] = useState<QuantityMode>(ingredient.quantityMode ?? 'exact');
+  const [stockLevel, setStockLevel] = useState<StockLevel>(ingredient.stockLevel ?? 'たっぷり');
   const [expiryDate, setExpiryDate] = useState(initialExpiry);
   const [saving, setSaving] = useState(false);
 
@@ -51,7 +53,9 @@ export function EditIngredientSheet({ ingredient, onClose }: EditIngredientSheet
         category,
         itemType,
         unit: resolvedUnit,
-        quantity: Math.max(0, quantity),
+        quantity: quantityMode === 'rough' ? STOCK_LEVEL_QUANTITY[stockLevel] : Math.max(0, quantity),
+        quantityMode,
+        stockLevel: quantityMode === 'rough' ? stockLevel : undefined,
         // 日用品には期限概念がないため、区分を日用品に変えた場合は期限情報をクリアする
         ...(itemType === '日用品'
           ? { expiryDate: undefined, expiryBatches: undefined }
@@ -129,16 +133,48 @@ export function EditIngredientSheet({ ingredient, onClose }: EditIngredientSheet
       </div>
 
       <div className="field">
-        <label>在庫量</label>
-        <div className="stepper" style={{ justifyContent: 'space-between' }}>
-          <button onClick={() => setQuantity((q) => Math.max(0, Math.round((q - 1) * 10) / 10))}>−</button>
-          <span>
-            {quantity}
-            {resolvedUnit}
-          </span>
-          <button onClick={() => setQuantity((q) => Math.round((q + 1) * 10) / 10)}>＋</button>
+        <label>管理方式</label>
+        <div className="chip-row">
+          {(['exact', 'rough'] as QuantityMode[]).map((m) => (
+            <button
+              key={m}
+              className={`chip${quantityMode === m ? ' active' : ''}`}
+              onClick={() => setQuantityMode(m)}
+            >
+              {m === 'exact' ? '個数で管理' : 'ざっくり4段階'}
+            </button>
+          ))}
         </div>
       </div>
+
+      {quantityMode === 'exact' ? (
+        <div className="field">
+          <label>在庫量</label>
+          <div className="stepper" style={{ justifyContent: 'space-between' }}>
+            <button onClick={() => setQuantity((q) => Math.max(0, Math.round((q - 1) * 10) / 10))}>−</button>
+            <span>
+              {quantity}
+              {resolvedUnit}
+            </span>
+            <button onClick={() => setQuantity((q) => Math.round((q + 1) * 10) / 10)}>＋</button>
+          </div>
+        </div>
+      ) : (
+        <div className="field">
+          <label>残量の目安</label>
+          <div className="chip-row">
+            {STOCK_LEVELS.map((level) => (
+              <button
+                key={level}
+                className={`chip${stockLevel === level ? ' active' : ''}`}
+                onClick={() => setStockLevel(level)}
+              >
+                {level}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {itemType === '食品' && (
         <div className="field">

@@ -6,7 +6,7 @@ import { listCookedDishes } from '../repositories/cookedDishRepo';
 import { getPeriodCost, foodPortionOf } from './foodCost';
 import { getCurrentPeriod, formatPeriodRangeLabel } from '../utils/period';
 import { formatDateLabel } from '../utils/date';
-import { formatQuantity, formatUsage, formatMemoQuantity } from '../utils/quantity';
+import { formatStock, formatUsage, formatMemoQuantity } from '../utils/quantity';
 import { mealContentLabel } from '../utils/mealDisplay';
 import { getEarliestExpiry, daysUntil, formatExpiryRelative } from '../utils/expiry';
 import type { Ingredient, Meal, CookedDish, Purchase } from '../types';
@@ -28,7 +28,7 @@ const TOPIC_QUESTIONS: Record<AiConsultTopic, string> = {
 };
 
 function formatIngredientLine(i: Ingredient): string {
-  return `・${i.name}：${formatQuantity(i.quantity, i.unit)}`;
+  return `・${i.name}：${formatStock(i)}`;
 }
 
 function formatCookedDishLine(d: CookedDish): string {

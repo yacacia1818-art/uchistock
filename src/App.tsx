@@ -9,6 +9,7 @@ import { More } from './pages/More';
 import { Settings } from './pages/Settings';
 import { Recipes } from './pages/Recipes';
 import { RecipeDetail } from './pages/RecipeDetail';
+import { Memos } from './pages/Memos';
 import { About } from './pages/About';
 
 export default function App() {
@@ -25,6 +26,7 @@ export default function App() {
             <Route path="/settings" element={<Settings />} />
             <Route path="/recipes" element={<Recipes />} />
             <Route path="/recipes/:id" element={<RecipeDetail />} />
+            <Route path="/memos" element={<Memos />} />
             <Route path="/about" element={<About />} />
           </Routes>
           <BottomNav />

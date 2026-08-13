@@ -11,15 +11,17 @@ import {
   Info,
   Settings as SettingsIcon,
   Star,
+  StickyNote,
 } from 'lucide-react';
 import { Header } from '../components/Header';
 import { listRecipes } from '../repositories/recipeRepo';
+import { listMemos } from '../repositories/memoRepo';
 import { useDataVersion } from '../hooks/useDataVersion';
 import { useToast } from '../components/ToastProvider';
 import { toUserMessage } from '../utils/errors';
 import { copyToClipboard } from '../utils/clipboard';
 import { buildAiConsultText, type AiConsultTopic } from '../services/aiSummary';
-import type { Recipe } from '../types';
+import type { Memo, Recipe } from '../types';
 
 const CATEGORY_EMOJI: Record<string, string> = {
   主食: '🍚',
@@ -42,12 +44,16 @@ export function More() {
   const { showToast } = useToast();
   const version = useDataVersion();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [memos, setMemos] = useState<Memo[]>([]);
   const [copying, setCopying] = useState(false);
 
   useEffect(() => {
     listRecipes()
       .then((r) => setRecipes(r.slice(0, 3)))
       .catch((e) => showToast(toUserMessage(e, 'レシピの読み込みに失敗しました')));
+    listMemos()
+      .then((m) => setMemos(m.slice(0, 3)))
+      .catch((e) => showToast(toUserMessage(e, 'メモの読み込みに失敗しました')));
   }, [version, showToast]);
 
   async function handleCopy(topic: AiConsultTopic) {
@@ -68,6 +74,39 @@ export function More() {
     <>
       <Header icon={<MoreHorizontal size={20} />} title="その他" />
       <div className="page-content">
+        <div className="card mb-16">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <div className="section-title" style={{ marginBottom: 0 }}>
+              📝 メモ
+            </div>
+            <button className="btn-ghost btn btn-sm" onClick={() => navigate('/memos')}>
+              すべて見る <ChevronRight size={14} />
+            </button>
+          </div>
+          {memos.length === 0 ? (
+            <p className="text-muted" style={{ fontSize: 13 }}>まだメモがありません</p>
+          ) : (
+            memos.map((m) => (
+              <button
+                key={m.id}
+                className="list-row"
+                style={{ width: '100%', border: 'none', background: 'none', textAlign: 'left', font: 'inherit' }}
+                onClick={() => navigate('/memos')}
+              >
+                <div className="recipe-thumb">
+                  <StickyNote size={18} />
+                </div>
+                <div className="row-main">
+                  <div className="row-title" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {m.body}
+                  </div>
+                </div>
+                <ChevronRight size={16} className="text-muted" />
+              </button>
+            ))
+          )}
+        </div>
+
         <div className="card mb-16">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <div className="section-title" style={{ marginBottom: 0 }}>

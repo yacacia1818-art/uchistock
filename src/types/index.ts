@@ -156,6 +156,14 @@ export interface Recipe {
   updatedAt: string;
 }
 
+// レシピの簡易版：自由記述のメモ（本文のみ・カテゴリ等の入力コストをかけない）
+export interface Memo {
+  id: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Settings {
   id: 'settings';
   monthlyBudget: number;

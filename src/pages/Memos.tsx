@@ -8,7 +8,7 @@ import { useDataVersion } from '../hooks/useDataVersion';
 import { useToast } from '../components/ToastProvider';
 import { notifyDataChanged } from '../utils/bus';
 import { toUserMessage } from '../utils/errors';
-import { formatDateLabel } from '../utils/date';
+import { formatDateLabel, localDateFromIso } from '../utils/date';
 import type { Memo } from '../types';
 
 export function Memos() {
@@ -74,7 +74,7 @@ export function Memos() {
                   <div className="row-title" style={{ whiteSpace: 'pre-wrap' }}>
                     {m.body}
                   </div>
-                  <div className="row-sub">{formatDateLabel(m.createdAt.slice(0, 10))}</div>
+                  <div className="row-sub">{formatDateLabel(localDateFromIso(m.createdAt))}</div>
                 </button>
                 <button className="icon-btn" onClick={() => handleDelete(m.id)} aria-label="削除">
                   <Trash2 size={16} />

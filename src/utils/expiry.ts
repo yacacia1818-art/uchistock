@@ -53,9 +53,11 @@ export function consumeExpiryBatches(
   return { expiryDate: next[0].date, expiryBatches: next };
 }
 
+// 「あと◯日」は今日を含めて数える（例：今日8/14・期限8/17なら「あと4日」＝14,15,16,17日の4日間使える）。
+// 期限切れ・当日・明日の判定自体（daysUntilの差分計算）は変更しない。表示文言のみ+1日する
 export function formatExpiryRelative(diffDays: number): string {
   if (diffDays < 0) return '期限切れ';
   if (diffDays === 0) return '今日まで';
   if (diffDays === 1) return '明日まで';
-  return `あと${diffDays}日`;
+  return `あと${diffDays + 1}日`;
 }

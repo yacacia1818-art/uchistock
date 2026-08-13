@@ -15,6 +15,13 @@ export function nowIsoStr(): string {
   return new Date().toISOString();
 }
 
+// nowIsoStr()等のUTC ISO日時から、表示用のローカル日付（YYYY-MM-DD）を取り出す。
+// isoStr.slice(0, 10)はUTC日付になってしまい、日本時間0時台〜9時台に前日の日付として
+// 表示されてしまうため、必ずこの関数を経由すること
+export function localDateFromIso(isoStr: string): string {
+  return todayDateStr(new Date(isoStr));
+}
+
 export function currentYearMonth(d: Date = new Date()): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }

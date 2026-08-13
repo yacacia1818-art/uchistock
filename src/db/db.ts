@@ -7,6 +7,7 @@ import type {
   Meal,
   Recipe,
   Memo,
+  AppNotification,
   Settings,
   CookedDish,
   RoughLevel,
@@ -22,10 +23,11 @@ interface MeshiLogDB extends DBSchema {
   recipes: { key: string; value: Recipe };
   cookedDishes: { key: string; value: CookedDish; indexes: { 'by-date': string } };
   memos: { key: string; value: Memo };
+  notifications: { key: string; value: AppNotification };
 }
 
 const DB_NAME = 'meshi-log-db';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 // v1.0の「ざっくり残量」を新しい数量モデルへ変換する際の目安値（既存データの非破壊的マイグレーション用）
 const ROUGH_LEVEL_QUANTITY: Record<RoughLevel, number> = {
@@ -102,6 +104,12 @@ export function getDB(): Promise<IDBPDatabase<MeshiLogDB>> {
         if (oldVersion < 3) {
           if (!db.objectStoreNames.contains('memos')) {
             db.createObjectStore('memos', { keyPath: 'id' });
+          }
+        }
+
+        if (oldVersion < 4) {
+          if (!db.objectStoreNames.contains('notifications')) {
+            db.createObjectStore('notifications', { keyPath: 'id' });
           }
         }
       },

@@ -1,51 +1,59 @@
 import { BottomSheet } from './BottomSheet';
-import { formatStock } from '../utils/quantity';
-import { formatExpiryRelative } from '../utils/expiry';
-import type { ExpiringIngredient } from '../services/expirySummary';
+import { formatDateLabel, localDateFromIso } from '../utils/date';
+import type { AppNotification } from '../types';
 
 interface ExpiryNoticeSheetProps {
-  items: ExpiringIngredient[];
+  notifications: AppNotification[];
+  onMarkRead: (id: string) => void;
+  onMarkAllRead: () => void;
   onClose: () => void;
 }
 
-export function ExpiryNoticeSheet({ items, onClose }: ExpiryNoticeSheetProps) {
-  const groups = new Map<string, ExpiringIngredient[]>();
-  for (const item of items) {
-    const label = formatExpiryRelative(item.days);
-    if (!groups.has(label)) groups.set(label, []);
-    groups.get(label)!.push(item);
-  }
+// ベル通知＝過去に発生したイベントの履歴。既読にしても、実際の在庫状態（ホームの赤帯）には影響しない
+export function ExpiryNoticeSheet({ notifications, onMarkRead, onMarkAllRead, onClose }: ExpiryNoticeSheetProps) {
+  const unreadCount = notifications.filter((n) => !n.isRead).length;
 
   return (
     <BottomSheet title="お知らせ" onClose={onClose}>
-      {items.length === 0 ? (
-        <div className="empty-state">期限が近い食材はありません</div>
+      {notifications.length === 0 ? (
+        <div className="empty-state">通知はまだありません</div>
       ) : (
-        [...groups.entries()].map(([label, group]) => (
-          <div key={label} className="mb-16">
-            <div
-              className="text-muted"
-              style={{
-                fontSize: 12,
-                fontWeight: 700,
-                marginBottom: 4,
-                color: group[0].days <= 0 ? 'var(--color-danger)' : undefined,
-              }}
-            >
-              【{label}】
-            </div>
-            <div className="card" style={{ padding: '4px 12px' }}>
-              {group.map(({ ingredient }) => (
-                <div className="list-row" key={ingredient.id}>
-                  <div className="row-main">
-                    <div className="row-title">{ingredient.name}</div>
-                    <div className="row-sub">{formatStock(ingredient)}</div>
+        <>
+          {unreadCount > 0 && (
+            <button className="btn btn-outline mb-16" onClick={onMarkAllRead}>
+              すべて既読にする（{unreadCount}件）
+            </button>
+          )}
+          <div className="card" style={{ padding: '4px 12px' }}>
+            {notifications.map((n) => (
+              <button
+                key={n.id}
+                className="list-row"
+                style={{ width: '100%', border: 'none', background: 'none', textAlign: 'left', font: 'inherit' }}
+                onClick={() => !n.isRead && onMarkRead(n.id)}
+              >
+                <div className="row-main">
+                  <div className="row-title" style={{ fontWeight: n.isRead ? 400 : 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {!n.isRead && (
+                      <span
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: 999,
+                          background: 'var(--color-danger)',
+                          flexShrink: 0,
+                          display: 'inline-block',
+                        }}
+                      />
+                    )}
+                    {n.message}
                   </div>
+                  <div className="row-sub">{formatDateLabel(localDateFromIso(n.createdAt))}</div>
                 </div>
-              ))}
-            </div>
+              </button>
+            ))}
           </div>
-        ))
+        </>
       )}
     </BottomSheet>
   );

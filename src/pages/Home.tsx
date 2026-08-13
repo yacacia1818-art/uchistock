@@ -12,8 +12,10 @@ import { DayRecordDetail } from '../components/DayRecordDetail';
 import { getSettings } from '../repositories/settingsRepo';
 import { listAvailableCookedDishes } from '../repositories/cookedDishRepo';
 import { decrementIngredientQuantity, updateIngredient } from '../repositories/ingredientRepo';
+import { listNotifications, markNotificationRead, markAllNotificationsRead } from '../repositories/notificationRepo';
 import { getPeriodCost } from '../services/foodCost';
 import { listExpiringIngredients, type ExpiringIngredient } from '../services/expirySummary';
+import { syncExpiryNotifications } from '../services/notificationService';
 import { getCurrentPeriod, formatPeriodRangeLabel, remainingDaysInPeriod } from '../utils/period';
 import { expiryUrgency, expiryUrgencyIcon, expiryUrgencyStyle } from '../utils/expiryUi';
 import { addMonths, currentYearMonth, formatDateLabel, todayDateStr } from '../utils/date';
@@ -24,9 +26,7 @@ import { useMonthCalendarData } from '../hooks/useMonthCalendarData';
 import { useToast } from '../components/ToastProvider';
 import { toUserMessage } from '../utils/errors';
 import { STOCK_LEVELS, STOCK_LEVEL_QUANTITY } from '../types';
-import type { Ingredient, MealType } from '../types';
-
-const EXPIRY_WARNING_DAYS = 3;
+import type { AppNotification, Ingredient, MealType } from '../types';
 
 export function Home() {
   const navigate = useNavigate();
@@ -39,8 +39,8 @@ export function Home() {
   const [cookedStock, setCookedStock] = useState<
     Awaited<ReturnType<typeof listAvailableCookedDishes>>
   >([]);
-  const [bellExpiring, setBellExpiring] = useState<ExpiringIngredient[]>([]);
   const [allExpiring, setAllExpiring] = useState<ExpiringIngredient[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [showMealForm, setShowMealForm] = useState<MealType | null>(null);
   const [showPurchaseForm, setShowPurchaseForm] = useState(false);
   const [showAddIngredient, setShowAddIngredient] = useState(false);
@@ -53,12 +53,14 @@ export function Home() {
     let cancelled = false;
     async function load() {
       try {
+        await syncExpiryNotifications();
         const settings = await getSettings();
         const period = getCurrentPeriod(settings.budgetStartDay);
-        const [cost, expiring, dishes] = await Promise.all([
+        const [cost, expiring, dishes, notifs] = await Promise.all([
           getPeriodCost(period),
           listExpiringIngredients(),
           listAvailableCookedDishes(),
+          listNotifications(),
         ]);
         if (cancelled) return;
         setBudget(settings.monthlyBudget);
@@ -66,7 +68,7 @@ export function Home() {
         setMealTrackingEnabled(settings.mealTrackingEnabled ?? true);
         setUsed(cost.used);
         setAllExpiring(expiring);
-        setBellExpiring(expiring.filter((e) => e.days <= EXPIRY_WARNING_DAYS));
+        setNotifications(notifs);
         setCookedStock(dishes.filter((d) => d.servingsRemaining !== undefined && d.servingsRemaining > 0));
       } catch (e) {
         showToast(toUserMessage(e, 'データの読み込みに失敗しました'));
@@ -103,6 +105,26 @@ export function Home() {
     todayCount > 0 ? `今日まで${todayCount}件` : null,
   ].filter((s): s is string => s !== null);
 
+  const unreadCount = notifications.filter((n) => !n.isRead).length;
+
+  async function handleMarkNotificationRead(id: string) {
+    try {
+      await markNotificationRead(id);
+      setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
+    } catch (e) {
+      showToast(toUserMessage(e, '更新に失敗しました'));
+    }
+  }
+
+  async function handleMarkAllNotificationsRead() {
+    try {
+      await markAllNotificationsRead();
+      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    } catch (e) {
+      showToast(toUserMessage(e, '更新に失敗しました'));
+    }
+  }
+
   async function handleQuickUse(ingredient: Ingredient) {
     try {
       if (ingredient.quantityMode === 'rough') {
@@ -133,7 +155,7 @@ export function Home() {
             onClick={() => setShowNotices(true)}
           >
             <Bell size={20} />
-            {bellExpiring.length > 0 && (
+            {unreadCount > 0 && (
               <span
                 style={{
                   position: 'absolute',
@@ -153,7 +175,7 @@ export function Home() {
                   lineHeight: 1,
                 }}
               >
-                {bellExpiring.length}
+                {unreadCount}
               </span>
             )}
           </button>
@@ -325,7 +347,14 @@ export function Home() {
       {showPurchaseForm && <PurchaseFormSheet onClose={() => setShowPurchaseForm(false)} />}
       {showAddIngredient && <AddIngredientSheet onClose={() => setShowAddIngredient(false)} />}
       {showAddMemo && <MemoFormSheet onClose={() => setShowAddMemo(false)} />}
-      {showNotices && <ExpiryNoticeSheet items={bellExpiring} onClose={() => setShowNotices(false)} />}
+      {showNotices && (
+        <ExpiryNoticeSheet
+          notifications={notifications}
+          onMarkRead={handleMarkNotificationRead}
+          onMarkAllRead={handleMarkAllNotificationsRead}
+          onClose={() => setShowNotices(false)}
+        />
+      )}
     </>
   );
 }

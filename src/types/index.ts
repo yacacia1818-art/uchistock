@@ -180,6 +180,19 @@ export interface Memo {
   updatedAt: string;
 }
 
+// v1.6: 通知（イベント履歴）。赤帯（現在の在庫状態のリアルタイム集計）とは独立しており、
+// 既読にしても実際の在庫状態には影響しない
+export type NotificationType = 'expiry';
+
+export interface AppNotification {
+  id: string;
+  type: NotificationType;
+  message: string;
+  relatedItemId?: string;
+  createdAt: string;
+  isRead: boolean;
+}
+
 export interface Settings {
   id: 'settings';
   monthlyBudget: number;

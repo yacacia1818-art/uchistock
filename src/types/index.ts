@@ -11,16 +11,30 @@ export type RoughLevel = '多い' | '半分' | '少ない' | 'なし';
 export const UNIT_OPTIONS = ['個', '本', 'パック', '袋', '箱', '玉', '枚', '食', 'その他'] as const;
 export type UnitOption = (typeof UNIT_OPTIONS)[number];
 
-// v1.5: 数量の管理方式。品目ごとに実数管理（個数・本数）か4段階のざっくり管理かを選べる
-export type QuantityMode = 'exact' | 'rough';
+// v1.5レガシー：数量の管理方式（'exact'=実数管理／'rough'=4段階）。
+// v1.7で「個数（count）」「ゲージ（gauge）」の2方式へ統合したため、新規保存では使わない。
+// 既存データはingredientRepo.normalize()で非破壊に読み替える
+export type LegacyQuantityMode = 'exact' | 'rough';
 export const STOCK_LEVELS = ['たっぷり', '半分', '少し', '切れそう'] as const;
 export type StockLevel = (typeof STOCK_LEVELS)[number];
-// ざっくり管理の各段階に対応する目安数量（期限計算・記録画面での表示等、既存の数値ベースの処理と互換性を保つため）
+// v1.5レガシー4段階の目安数量（残置。stockLevelは新規保存では使わずgaugeLevelを使う）
 export const STOCK_LEVEL_QUANTITY: Record<StockLevel, number> = {
   たっぷり: 3,
   半分: 2,
   少し: 1,
   切れそう: 0.3,
+};
+
+// v1.7: 数量管理方式。個数（卵・パック等、−／＋でワンタップ増減）か
+// ゲージ（調味料・洗剤等少しずつ使う品目、10段階を上下矢印で増減）の2方式
+export type QuantityMode = 'count' | 'gauge';
+export const GAUGE_MAX = 10;
+// v1.5レガシー4段階(stockLevel)→10段階ゲージへの読み替え目安
+export const STOCK_LEVEL_TO_GAUGE: Record<StockLevel, number> = {
+  たっぷり: 10,
+  半分: 5,
+  少し: 2,
+  切れそう: 1,
 };
 
 // 期限バッチ：購入ごとの期限と数量を保持する（古い期限を失わないため）
@@ -47,10 +61,13 @@ export interface Ingredient {
   expiryBatches?: ExpiryBatch[];
   // v1.4: 食品/日用品の区分。未設定の既存データは食品として扱う
   itemType?: ShoppingCategory;
-  // v1.5: 数量管理方式。未設定の既存データは実数管理として扱う
-  quantityMode?: QuantityMode;
-  // quantityMode==='rough'のときのみ意味を持つ。quantityは表示・互換性のためこの値から算出した目安数を保持する
+  // v1.5レガシー（'exact'|'rough'）を含む可能性がある生値。読み込み時は必ずingredientRepo.normalize()を経由し、
+  // 正規化済みのQuantityMode（'count'|'gauge'）として扱うこと
+  quantityMode?: QuantityMode | LegacyQuantityMode;
+  // v1.5レガシー：quantityMode==='rough'（正規化後'gauge'）のときの4段階目安。新規保存では使わない
   stockLevel?: StockLevel;
+  // v1.7: quantityMode==='gauge'のときの10段階の目安値（0〜10）。quantityは互換性のためgaugeLevel/10を保持する
+  gaugeLevel?: number;
 }
 
 export type ShoppingCategory = '食品' | '日用品';

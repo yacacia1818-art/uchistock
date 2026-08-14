@@ -16,6 +16,10 @@ interface CustomFractionInput {
 export function IngredientUsageSelector({ ingredients, value, onChange }: IngredientUsageSelectorProps) {
   const [customFractions, setCustomFractions] = useState<Record<string, CustomFractionInput>>({});
   const [modeOverride, setModeOverride] = useState<Record<string, UsageMode>>({});
+  // どのチップを押して選択したかを明示的に記録する。値の等価判定だけでactiveを決めると、
+  // 例えば残量がちょうど1/3のときに「1/3」を押すと使用量が残量と一致し、
+  // 「1/3」と「全部」が同時にactiveに見えてしまう不具合があったため
+  const [selectedChoiceLabel, setSelectedChoiceLabel] = useState<Record<string, string>>({});
 
   const available = ingredients.filter((i) => i.quantity > 0);
   const selectedMap = new Map(value.map((u) => [u.ingredientId, u]));
@@ -34,6 +38,11 @@ export function IngredientUsageSelector({ ingredients, value, onChange }: Ingred
   function toggle(ingredient: Ingredient) {
     if (selectedMap.has(ingredient.id)) {
       onChange(value.filter((u) => u.ingredientId !== ingredient.id));
+      setSelectedChoiceLabel((prev) => {
+        const next = { ...prev };
+        delete next[ingredient.id];
+        return next;
+      });
       return;
     }
     const mode = modeFor(ingredient);
@@ -61,8 +70,14 @@ export function IngredientUsageSelector({ ingredients, value, onChange }: Ingred
     if (!selectedMap.has(ingredient.id)) return;
     if (mode === 'count') {
       updateUsage(ingredient.id, { type: 'count', value: 1 });
+      setSelectedChoiceLabel((prev) => {
+        const next = { ...prev };
+        delete next[ingredient.id];
+        return next;
+      });
     } else {
       updateUsage(ingredient.id, { type: 'fraction', value: Math.min(1 / 3, ingredient.quantity) });
+      setSelectedChoiceLabel((prev) => ({ ...prev, [ingredient.id]: '1/3' }));
     }
   }
 
@@ -139,17 +154,23 @@ export function IngredientUsageSelector({ ingredients, value, onChange }: Ingred
                         {FRACTION_CHOICES.map((choice) => {
                           const isCustom = choice.value === 'custom';
                           const isAll = choice.value === 'all';
+                          const overrideLabel = selectedChoiceLabel[ingredient.id];
+                          // 明示的に押したチップを最優先で判定する。未記録（編集画面を開いた直後等）の場合のみ、
+                          // 使用量の一致から推測する
                           const active =
-                            (isAll && Math.abs(selected.usage.value - ingredient.quantity) < 1e-9) ||
-                            (!isAll &&
-                              !isCustom &&
-                              typeof choice.value === 'number' &&
-                              Math.abs(selected.usage.value - Math.min(choice.value, ingredient.quantity)) < 1e-9);
+                            overrideLabel !== undefined
+                              ? overrideLabel === choice.label
+                              : (isAll && Math.abs(selected.usage.value - ingredient.quantity) < 1e-9) ||
+                                (!isAll &&
+                                  !isCustom &&
+                                  typeof choice.value === 'number' &&
+                                  Math.abs(selected.usage.value - Math.min(choice.value, ingredient.quantity)) < 1e-9);
                           return (
                             <button
                               key={choice.label}
                               className={`chip${active ? ' active' : ''}`}
                               onClick={() => {
+                                setSelectedChoiceLabel((prev) => ({ ...prev, [ingredient.id]: choice.label }));
                                 if (isAll) {
                                   updateUsage(ingredient.id, { type: 'fraction', value: ingredient.quantity });
                                 } else if (isCustom) {

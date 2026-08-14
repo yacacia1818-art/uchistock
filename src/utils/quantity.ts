@@ -1,4 +1,5 @@
 import type { Ingredient, ShoppingMemoItem, UsageAmount } from '../types';
+import { GAUGE_MAX } from '../types';
 import { formatFraction, snapToFraction, fractionToDecimal } from './fraction';
 
 // パック・袋・玉など「まとめ買いして少しずつ使う」単位（割合選択UIを使う）
@@ -38,10 +39,20 @@ export function formatQuantity(quantity: number, unit: string): string {
   return formatFraction(safe, unit);
 }
 
-// 在庫の残量表示：4段階管理の食材はラベル（たっぷり等）、実数管理の食材は数量を表示する
-export function formatStock(ingredient: Pick<Ingredient, 'quantity' | 'unit' | 'quantityMode' | 'stockLevel'>): string {
-  if (ingredient.quantityMode === 'rough' && ingredient.stockLevel) {
-    return ingredient.stockLevel;
+// ゲージ管理の現在値（0〜10）。quantityが正なので、そこから都度導出する
+export function gaugeLevelOf(ingredient: Pick<Ingredient, 'quantity'>): number {
+  return Math.round(Math.max(0, Math.min(GAUGE_MAX, ingredient.quantity * GAUGE_MAX)));
+}
+
+// gaugeLevel（0〜10）を、既存の分数スナップ処理に渡せる10%刻みのquantityへ変換する
+export function gaugeLevelToQuantity(level: number): number {
+  return snapQuantity(Math.max(0, Math.min(GAUGE_MAX, level)) / GAUGE_MAX);
+}
+
+// 在庫の残量表示：ゲージ管理の食材は「70%」のような表示、個数管理の食材は数量を表示する
+export function formatStock(ingredient: Pick<Ingredient, 'quantity' | 'unit' | 'quantityMode'>): string {
+  if (ingredient.quantityMode === 'gauge') {
+    return `${gaugeLevelOf(ingredient) * 10}%`;
   }
   return formatQuantity(ingredient.quantity, ingredient.unit);
 }

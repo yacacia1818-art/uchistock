@@ -1,15 +1,15 @@
 import { Pencil, Trash2 } from 'lucide-react';
-import { STOCK_LEVELS, STOCK_LEVEL_QUANTITY } from '../types';
 import type { Ingredient } from '../types';
 import { decrementIngredientQuantity, deleteIngredient, updateIngredient } from '../repositories/ingredientRepo';
 import { notifyDataChanged } from '../utils/bus';
 import { useToast } from './ToastProvider';
 import { toUserMessage } from '../utils/errors';
-import { formatStock } from '../utils/quantity';
+import { formatStock, gaugeLevelOf, gaugeLevelToQuantity } from '../utils/quantity';
 import { formatExpiryRelative, daysUntil, getEarliestExpiry } from '../utils/expiry';
 import { expiryUrgency, expiryUrgencyIcon, expiryUrgencyStyle } from '../utils/expiryUi';
 import { categoryEmojiFor } from '../utils/categoryEmoji';
 import { formatDateLabel } from '../utils/date';
+import { GaugeControl } from './GaugeControl';
 
 interface IngredientRowProps {
   ingredient: Ingredient;
@@ -37,13 +37,15 @@ export function IngredientRow({ ingredient, onEdit }: IngredientRowProps) {
     }
   }
 
-  // 4段階管理：たっぷり→半分→少し→切れそうの順に1段階ずつ増減する
-  async function stepStockLevel(delta: 1 | -1) {
-    const currentIdx = STOCK_LEVELS.indexOf(ingredient.stockLevel ?? 'たっぷり');
-    const nextIdx = Math.min(STOCK_LEVELS.length - 1, Math.max(0, currentIdx - delta));
-    const nextLevel = STOCK_LEVELS[nextIdx];
+  async function handleGaugeChange(nextLevel: number) {
     try {
-      await updateIngredient({ ...ingredient, stockLevel: nextLevel, quantity: STOCK_LEVEL_QUANTITY[nextLevel] });
+      const nextQuantity = gaugeLevelToQuantity(nextLevel);
+      if (nextQuantity < ingredient.quantity) {
+        // 期限バッチもFIFOで一緒に減らす
+        await decrementIngredientQuantity(ingredient.id, ingredient.quantity - nextQuantity);
+      } else {
+        await updateIngredient({ ...ingredient, quantity: nextQuantity });
+      }
       notifyDataChanged();
     } catch (e) {
       showToast(toUserMessage(e, '更新に失敗しました'));
@@ -112,29 +114,21 @@ export function IngredientRow({ ingredient, onEdit }: IngredientRowProps) {
       >
         <Trash2 size={16} />
       </button>
-      <div className="stepper" style={{ flexBasis: '100%', justifyContent: 'flex-end' }}>
-        {ingredient.quantityMode === 'rough' ? (
-          <>
-            <button onClick={() => stepStockLevel(-1)} aria-label="減らす">
-              −
-            </button>
-            <span style={{ minWidth: 64, textAlign: 'center' }}>{formatStock(ingredient)}</span>
-            <button onClick={() => stepStockLevel(1)} aria-label="増やす">
-              ＋
-            </button>
-          </>
-        ) : (
-          <>
-            <button onClick={() => stepQuantity(-1)} aria-label="減らす">
-              −
-            </button>
-            <span style={{ minWidth: 48 }}>{formatStock(ingredient)}</span>
-            <button onClick={() => stepQuantity(1)} aria-label="増やす">
-              ＋
-            </button>
-          </>
-        )}
-      </div>
+      {ingredient.quantityMode === 'gauge' ? (
+        <div style={{ flexBasis: '100%' }}>
+          <GaugeControl level={gaugeLevelOf(ingredient)} onChange={handleGaugeChange} />
+        </div>
+      ) : (
+        <div className="stepper" style={{ flexBasis: '100%', justifyContent: 'flex-end' }}>
+          <button onClick={() => stepQuantity(-1)} aria-label="減らす">
+            −
+          </button>
+          <span style={{ minWidth: 48 }}>{formatStock(ingredient)}</span>
+          <button onClick={() => stepQuantity(1)} aria-label="増やす">
+            ＋
+          </button>
+        </div>
+      )}
     </div>
   );
 }

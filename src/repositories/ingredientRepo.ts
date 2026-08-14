@@ -1,5 +1,6 @@
 import { getDB } from '../db/db';
-import type { Ingredient } from '../types';
+import { GAUGE_MAX, STOCK_LEVEL_TO_GAUGE } from '../types';
+import type { Ingredient, LegacyQuantityMode, QuantityMode } from '../types';
 import { generateId } from '../utils/id';
 import { nowIsoStr } from '../utils/date';
 import { AppError } from '../utils/errors';
@@ -12,12 +13,36 @@ function normalizeUnit(unit: string | undefined): string {
   return (unit ?? '').trim() || '個';
 }
 
-function normalize(ingredient: Ingredient): Ingredient {
-  if (typeof ingredient.quantity === 'number' && ingredient.unit) {
-    const trimmed = normalizeUnit(ingredient.unit);
-    return trimmed === ingredient.unit ? ingredient : { ...ingredient, unit: trimmed };
+// v1.5レガシー（'exact'|'rough'）を'count'|'gauge'へ非破壊で読み替える。
+// 'rough'は数量のスケール自体が旧STOCK_LEVEL_QUANTITY（0.3〜3）で新ゲージのスケール（0〜1）と
+// 互換性がないため、stockLevelから一度だけ変換する。既にgaugeの場合はquantityが正としてgaugeLevelを都度導出する
+// （decrementIngredientQuantity等の消費でquantityが変わってもgaugeLevelが古い値を上書きしないようにするため）
+function normalizeQuantityMode(ingredient: Ingredient, quantity: number): { quantityMode: QuantityMode; gaugeLevel?: number; quantity: number } {
+  const rawMode = ingredient.quantityMode as QuantityMode | LegacyQuantityMode | undefined;
+  if (rawMode === 'gauge') {
+    const gaugeLevel = Math.round(Math.max(0, Math.min(GAUGE_MAX, quantity * GAUGE_MAX)));
+    return { quantityMode: 'gauge', gaugeLevel, quantity };
   }
-  return { ...ingredient, quantity: ingredient.quantity ?? ingredient.count ?? 0, unit: normalizeUnit(ingredient.unit) };
+  if (rawMode === 'rough') {
+    const gaugeLevel = STOCK_LEVEL_TO_GAUGE[ingredient.stockLevel ?? 'たっぷり'];
+    return { quantityMode: 'gauge', gaugeLevel, quantity: snapQuantity(gaugeLevel / GAUGE_MAX) };
+  }
+  return { quantityMode: 'count', gaugeLevel: undefined, quantity };
+}
+
+function normalize(ingredient: Ingredient): Ingredient {
+  const baseQuantity = typeof ingredient.quantity === 'number' ? ingredient.quantity : (ingredient.count ?? 0);
+  const trimmedUnit = normalizeUnit(ingredient.unit);
+  const { quantityMode, gaugeLevel, quantity } = normalizeQuantityMode(ingredient, baseQuantity);
+  if (
+    ingredient.quantity === quantity &&
+    ingredient.unit === trimmedUnit &&
+    ingredient.quantityMode === quantityMode &&
+    ingredient.gaugeLevel === gaugeLevel
+  ) {
+    return ingredient;
+  }
+  return { ...ingredient, quantity, unit: trimmedUnit, quantityMode, gaugeLevel };
 }
 
 export async function listIngredients(): Promise<Ingredient[]> {

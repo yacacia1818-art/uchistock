@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { BottomSheet } from './BottomSheet';
+import { GaugeControl } from './GaugeControl';
 import { updateIngredient } from '../repositories/ingredientRepo';
 import { useToast } from './ToastProvider';
 import { notifyDataChanged } from '../utils/bus';
 import { toUserMessage } from '../utils/errors';
 import { getEarliestExpiry } from '../utils/expiry';
-import { STOCK_LEVELS, STOCK_LEVEL_QUANTITY, UNIT_OPTIONS } from '../types';
-import type { HouseholdCategory, Ingredient, IngredientCategory, QuantityMode, ShoppingCategory, StockLevel } from '../types';
+import { gaugeLevelOf, gaugeLevelToQuantity } from '../utils/quantity';
+import { UNIT_OPTIONS } from '../types';
+import type { HouseholdCategory, Ingredient, IngredientCategory, QuantityMode, ShoppingCategory } from '../types';
 
 const FOOD_CATEGORIES: IngredientCategory[] = ['野菜', '肉・魚', '卵・乳製品', '主食', 'その他'];
 const HOUSEHOLD_CATEGORIES: HouseholdCategory[] = ['洗剤・掃除用品', '衛生用品', '薬・医薬品', '文房具・雑貨', 'その他'];
@@ -26,8 +28,10 @@ export function EditIngredientSheet({ ingredient, onClose }: EditIngredientSheet
   const [unit, setUnit] = useState<string>(isKnownUnit ? ingredient.unit : 'その他');
   const [customUnit, setCustomUnit] = useState(isKnownUnit ? '' : ingredient.unit);
   const [quantity, setQuantity] = useState(ingredient.quantity);
-  const [quantityMode, setQuantityMode] = useState<QuantityMode>(ingredient.quantityMode ?? 'exact');
-  const [stockLevel, setStockLevel] = useState<StockLevel>(ingredient.stockLevel ?? 'たっぷり');
+  const [quantityMode, setQuantityMode] = useState<QuantityMode>(
+    ingredient.quantityMode === 'gauge' ? 'gauge' : 'count'
+  );
+  const [gaugeLevel, setGaugeLevel] = useState(() => gaugeLevelOf(ingredient));
   const [expiryDate, setExpiryDate] = useState(initialExpiry);
   const [saving, setSaving] = useState(false);
 
@@ -47,22 +51,22 @@ export function EditIngredientSheet({ ingredient, onClose }: EditIngredientSheet
     setSaving(true);
     try {
       const expiryChanged = expiryDate !== initialExpiry;
+      const nextQuantity = quantityMode === 'gauge' ? gaugeLevelToQuantity(gaugeLevel) : Math.max(0, quantity);
       await updateIngredient({
         ...ingredient,
         name: name.trim(),
         category,
         itemType,
         unit: resolvedUnit,
-        quantity: quantityMode === 'rough' ? STOCK_LEVEL_QUANTITY[stockLevel] : Math.max(0, quantity),
+        quantity: nextQuantity,
         quantityMode,
-        stockLevel: quantityMode === 'rough' ? stockLevel : undefined,
         // 日用品には期限概念がないため、区分を日用品に変えた場合は期限情報をクリアする
         ...(itemType === '日用品'
           ? { expiryDate: undefined, expiryBatches: undefined }
           : expiryChanged
             ? {
                 expiryDate: expiryDate || undefined,
-                expiryBatches: expiryDate ? [{ date: expiryDate, quantity: Math.max(0, quantity) }] : undefined,
+                expiryBatches: expiryDate ? [{ date: expiryDate, quantity: nextQuantity }] : undefined,
               }
             : {}),
       });
@@ -135,19 +139,24 @@ export function EditIngredientSheet({ ingredient, onClose }: EditIngredientSheet
       <div className="field">
         <label>管理方式</label>
         <div className="chip-row">
-          {(['exact', 'rough'] as QuantityMode[]).map((m) => (
+          {(['count', 'gauge'] as QuantityMode[]).map((m) => (
             <button
               key={m}
               className={`chip${quantityMode === m ? ' active' : ''}`}
               onClick={() => setQuantityMode(m)}
             >
-              {m === 'exact' ? '個数で管理' : 'ざっくり4段階'}
+              {m === 'count' ? '個数' : 'ゲージ'}
             </button>
           ))}
         </div>
+        <p className="text-muted mt-8" style={{ fontSize: 12 }}>
+          {quantityMode === 'count'
+            ? '卵・パックなど数で数えられる品目向け'
+            : '調味料・洗剤など少しずつ使う品目向け'}
+        </p>
       </div>
 
-      {quantityMode === 'exact' ? (
+      {quantityMode === 'count' ? (
         <div className="field">
           <label>在庫量</label>
           <div className="stepper" style={{ justifyContent: 'space-between' }}>
@@ -161,18 +170,8 @@ export function EditIngredientSheet({ ingredient, onClose }: EditIngredientSheet
         </div>
       ) : (
         <div className="field">
-          <label>残量の目安</label>
-          <div className="chip-row">
-            {STOCK_LEVELS.map((level) => (
-              <button
-                key={level}
-                className={`chip${stockLevel === level ? ' active' : ''}`}
-                onClick={() => setStockLevel(level)}
-              >
-                {level}
-              </button>
-            ))}
-          </div>
+          <label>残量</label>
+          <GaugeControl level={gaugeLevel} onChange={setGaugeLevel} />
         </div>
       )}
 

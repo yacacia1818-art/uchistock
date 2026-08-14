@@ -9,9 +9,11 @@ import { AddIngredientSheet } from '../components/AddIngredientSheet';
 import { MemoFormSheet } from '../components/MemoFormSheet';
 import { MonthCalendarCard } from '../components/MonthCalendarCard';
 import { DayRecordDetail } from '../components/DayRecordDetail';
+import { BottomSheet } from '../components/BottomSheet';
+import { GaugeControl } from '../components/GaugeControl';
 import { getSettings } from '../repositories/settingsRepo';
 import { listAvailableCookedDishes } from '../repositories/cookedDishRepo';
-import { decrementIngredientQuantity, updateIngredient } from '../repositories/ingredientRepo';
+import { decrementIngredientQuantity } from '../repositories/ingredientRepo';
 import { listNotifications, markNotificationRead, markAllNotificationsRead } from '../repositories/notificationRepo';
 import { getPeriodCost } from '../services/foodCost';
 import { listExpiringIngredients, type ExpiringIngredient } from '../services/expirySummary';
@@ -19,13 +21,12 @@ import { syncExpiryNotifications } from '../services/notificationService';
 import { getCurrentPeriod, formatPeriodRangeLabel, remainingDaysInPeriod } from '../utils/period';
 import { expiryUrgency, expiryUrgencyIcon, expiryUrgencyStyle } from '../utils/expiryUi';
 import { addMonths, currentYearMonth, formatDateLabel, todayDateStr } from '../utils/date';
-import { formatStock } from '../utils/quantity';
+import { formatStock, gaugeLevelOf, gaugeLevelToQuantity } from '../utils/quantity';
 import { notifyDataChanged } from '../utils/bus';
 import { useDataVersion } from '../hooks/useDataVersion';
 import { useMonthCalendarData } from '../hooks/useMonthCalendarData';
 import { useToast } from '../components/ToastProvider';
 import { toUserMessage } from '../utils/errors';
-import { STOCK_LEVELS, STOCK_LEVEL_QUANTITY } from '../types';
 import type { AppNotification, Ingredient, MealType } from '../types';
 
 export function Home() {
@@ -46,6 +47,7 @@ export function Home() {
   const [showAddIngredient, setShowAddIngredient] = useState(false);
   const [showAddMemo, setShowAddMemo] = useState(false);
   const [showNotices, setShowNotices] = useState(false);
+  const [gaugeTarget, setGaugeTarget] = useState<Ingredient | null>(null);
   const [ym, setYm] = useState(currentYearMonth());
   const [selectedDate, setSelectedDate] = useState(todayDateStr());
 
@@ -125,17 +127,29 @@ export function Home() {
     }
   }
 
-  async function handleQuickUse(ingredient: Ingredient) {
+  function handleQuickUse(ingredient: Ingredient) {
+    if (ingredient.quantityMode === 'gauge') {
+      // ゲージ管理はワンタップで即減算せず、軽量なポップオーバーで量を選んでから確定させる
+      setGaugeTarget(ingredient);
+      return;
+    }
+    decrementIngredientQuantity(ingredient.id, 1)
+      .then(() => {
+        notifyDataChanged();
+        showToast(`${ingredient.name}を使いました`);
+      })
+      .catch((e) => showToast(toUserMessage(e, '更新に失敗しました')));
+  }
+
+  async function handleGaugeTargetChange(nextLevel: number) {
+    if (!gaugeTarget) return;
     try {
-      if (ingredient.quantityMode === 'rough') {
-        const idx = STOCK_LEVELS.indexOf(ingredient.stockLevel ?? 'たっぷり');
-        const nextLevel = STOCK_LEVELS[Math.min(STOCK_LEVELS.length - 1, idx + 1)];
-        await updateIngredient({ ...ingredient, stockLevel: nextLevel, quantity: STOCK_LEVEL_QUANTITY[nextLevel] });
-      } else {
-        await decrementIngredientQuantity(ingredient.id, 1);
+      const nextQuantity = gaugeLevelToQuantity(nextLevel);
+      if (nextQuantity < gaugeTarget.quantity) {
+        await decrementIngredientQuantity(gaugeTarget.id, gaugeTarget.quantity - nextQuantity);
       }
       notifyDataChanged();
-      showToast(`${ingredient.name}を使いました`);
+      setGaugeTarget({ ...gaugeTarget, quantity: nextQuantity });
     } catch (e) {
       showToast(toUserMessage(e, '更新に失敗しました'));
     }
@@ -218,7 +232,11 @@ export function Home() {
             <span>日用品 {householdCount}品</span>
           </div>
           {topExpiring.length > 0 ? (
-            topExpiring.map(({ ingredient, days }) => {
+            <>
+              <div className="text-muted" style={{ fontSize: 11, marginBottom: 4 }}>
+                期限が近い順
+              </div>
+              {topExpiring.map(({ ingredient, days }) => {
               const urgency = expiryUrgency(days);
               return (
                 <div className="link-row" key={ingredient.id}>
@@ -231,7 +249,8 @@ export function Home() {
                   </button>
                 </div>
               );
-            })
+              })}
+            </>
           ) : (
             <p className="text-muted" style={{ fontSize: 13 }}>
               期限が近いものはありません
@@ -347,6 +366,17 @@ export function Home() {
       {showPurchaseForm && <PurchaseFormSheet onClose={() => setShowPurchaseForm(false)} />}
       {showAddIngredient && <AddIngredientSheet onClose={() => setShowAddIngredient(false)} />}
       {showAddMemo && <MemoFormSheet onClose={() => setShowAddMemo(false)} />}
+      {gaugeTarget && (
+        <BottomSheet title={`${gaugeTarget.name}を使った`} onClose={() => setGaugeTarget(null)}>
+          <div className="field">
+            <label>残量</label>
+            <GaugeControl level={gaugeLevelOf(gaugeTarget)} onChange={handleGaugeTargetChange} />
+          </div>
+          <button className="btn btn-primary" onClick={() => setGaugeTarget(null)}>
+            完了
+          </button>
+        </BottomSheet>
+      )}
       {showNotices && (
         <ExpiryNoticeSheet
           notifications={notifications}

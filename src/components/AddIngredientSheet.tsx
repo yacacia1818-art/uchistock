@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { BottomSheet } from './BottomSheet';
+import { GaugeControl } from './GaugeControl';
 import { addIngredient } from '../repositories/ingredientRepo';
 import { useToast } from './ToastProvider';
 import { notifyDataChanged } from '../utils/bus';
 import { toUserMessage } from '../utils/errors';
-import { STOCK_LEVELS, STOCK_LEVEL_QUANTITY, UNIT_OPTIONS } from '../types';
-import type { HouseholdCategory, IngredientCategory, QuantityMode, ShoppingCategory, StockLevel } from '../types';
+import { gaugeLevelToQuantity } from '../utils/quantity';
+import { UNIT_OPTIONS } from '../types';
+import type { HouseholdCategory, IngredientCategory, QuantityMode, ShoppingCategory } from '../types';
 
 const FOOD_CATEGORIES: IngredientCategory[] = ['野菜', '肉・魚', '卵・乳製品', '主食', 'その他'];
 const HOUSEHOLD_CATEGORIES: HouseholdCategory[] = ['洗剤・掃除用品', '衛生用品', '薬・医薬品', '文房具・雑貨', 'その他'];
@@ -22,8 +24,8 @@ export function AddIngredientSheet({ onClose }: AddIngredientSheetProps) {
   const [unit, setUnit] = useState<string>('個');
   const [customUnit, setCustomUnit] = useState('');
   const [quantity, setQuantity] = useState(1);
-  const [quantityMode, setQuantityMode] = useState<QuantityMode>('exact');
-  const [stockLevel, setStockLevel] = useState<StockLevel>('たっぷり');
+  const [quantityMode, setQuantityMode] = useState<QuantityMode>('count');
+  const [gaugeLevel, setGaugeLevel] = useState(10);
   const [expiryDate, setExpiryDate] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -47,9 +49,8 @@ export function AddIngredientSheet({ onClose }: AddIngredientSheetProps) {
         category,
         itemType,
         unit: resolvedUnit,
-        quantity: quantityMode === 'rough' ? STOCK_LEVEL_QUANTITY[stockLevel] : quantity,
+        quantity: quantityMode === 'gauge' ? gaugeLevelToQuantity(gaugeLevel) : quantity,
         quantityMode,
-        stockLevel: quantityMode === 'rough' ? stockLevel : undefined,
         expiryDate: itemType === '食品' && expiryDate ? expiryDate : undefined,
         expiryBatches: itemType === '食品' && expiryDate ? [{ date: expiryDate, quantity }] : undefined,
       });
@@ -125,19 +126,24 @@ export function AddIngredientSheet({ onClose }: AddIngredientSheetProps) {
       <div className="field">
         <label>管理方式</label>
         <div className="chip-row">
-          {(['exact', 'rough'] as QuantityMode[]).map((m) => (
+          {(['count', 'gauge'] as QuantityMode[]).map((m) => (
             <button
               key={m}
               className={`chip${quantityMode === m ? ' active' : ''}`}
               onClick={() => setQuantityMode(m)}
             >
-              {m === 'exact' ? '個数で管理' : 'ざっくり4段階'}
+              {m === 'count' ? '個数' : 'ゲージ'}
             </button>
           ))}
         </div>
+        <p className="text-muted mt-8" style={{ fontSize: 12 }}>
+          {quantityMode === 'count'
+            ? '卵・パックなど数で数えられる品目向け'
+            : '調味料・洗剤など少しずつ使う品目向け'}
+        </p>
       </div>
 
-      {quantityMode === 'exact' ? (
+      {quantityMode === 'count' ? (
         <div className="field">
           <label>数量</label>
           <div className="stepper" style={{ justifyContent: 'space-between' }}>
@@ -151,18 +157,8 @@ export function AddIngredientSheet({ onClose }: AddIngredientSheetProps) {
         </div>
       ) : (
         <div className="field">
-          <label>残量の目安</label>
-          <div className="chip-row">
-            {STOCK_LEVELS.map((level) => (
-              <button
-                key={level}
-                className={`chip${stockLevel === level ? ' active' : ''}`}
-                onClick={() => setStockLevel(level)}
-              >
-                {level}
-              </button>
-            ))}
-          </div>
+          <label>残量</label>
+          <GaugeControl level={gaugeLevel} onChange={setGaugeLevel} />
         </div>
       )}
 

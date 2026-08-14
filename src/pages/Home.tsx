@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Utensils, ShoppingCart, Bell, ChevronRight, Plus, ChefHat, StickyNote } from 'lucide-react';
+import { Bell, ChevronRight, ChefHat } from 'lucide-react';
 import { Header } from '../components/Header';
 import { MealFormSheet } from '../components/MealFormSheet';
 import { PurchaseFormSheet } from '../components/PurchaseFormSheet';
@@ -9,19 +9,19 @@ import { AddIngredientSheet } from '../components/AddIngredientSheet';
 import { MemoFormSheet } from '../components/MemoFormSheet';
 import { MonthCalendarCard } from '../components/MonthCalendarCard';
 import { DayRecordDetail } from '../components/DayRecordDetail';
-import { BottomSheet } from '../components/BottomSheet';
-import { GaugeControl } from '../components/GaugeControl';
 import { getSettings } from '../repositories/settingsRepo';
 import { listAvailableCookedDishes } from '../repositories/cookedDishRepo';
-import { decrementIngredientQuantity } from '../repositories/ingredientRepo';
+import { decrementIngredientQuantity, updateIngredient } from '../repositories/ingredientRepo';
 import { listNotifications, markNotificationRead, markAllNotificationsRead } from '../repositories/notificationRepo';
 import { getPeriodCost } from '../services/foodCost';
 import { listExpiringIngredients, type ExpiringIngredient } from '../services/expirySummary';
 import { syncExpiryNotifications } from '../services/notificationService';
 import { getCurrentPeriod, formatPeriodRangeLabel, remainingDaysInPeriod } from '../utils/period';
-import { expiryUrgency, expiryUrgencyIcon, expiryUrgencyStyle } from '../utils/expiryUi';
+import { expiryUrgency, expiryUrgencyIcon } from '../utils/expiryUi';
+import { formatExpiryRelative } from '../utils/expiry';
 import { addMonths, currentYearMonth, formatDateLabel, todayDateStr } from '../utils/date';
 import { formatStock, gaugeLevelOf, gaugeLevelToQuantity } from '../utils/quantity';
+import { categoryEmojiFor } from '../utils/categoryEmoji';
 import { notifyDataChanged } from '../utils/bus';
 import { useDataVersion } from '../hooks/useDataVersion';
 import { useMonthCalendarData } from '../hooks/useMonthCalendarData';
@@ -47,7 +47,7 @@ export function Home() {
   const [showAddIngredient, setShowAddIngredient] = useState(false);
   const [showAddMemo, setShowAddMemo] = useState(false);
   const [showNotices, setShowNotices] = useState(false);
-  const [gaugeTarget, setGaugeTarget] = useState<Ingredient | null>(null);
+  const [fabOpen, setFabOpen] = useState(false);
   const [ym, setYm] = useState(currentYearMonth());
   const [selectedDate, setSelectedDate] = useState(todayDateStr());
 
@@ -127,29 +127,30 @@ export function Home() {
     }
   }
 
-  function handleQuickUse(ingredient: Ingredient) {
-    if (ingredient.quantityMode === 'gauge') {
-      // ゲージ管理はワンタップで即減算せず、軽量なポップオーバーで量を選んでから確定させる
-      setGaugeTarget(ingredient);
-      return;
-    }
-    decrementIngredientQuantity(ingredient.id, 1)
-      .then(() => {
-        notifyDataChanged();
-        showToast(`${ingredient.name}を使いました`);
-      })
-      .catch((e) => showToast(toUserMessage(e, '更新に失敗しました')));
-  }
-
-  async function handleGaugeTargetChange(nextLevel: number) {
-    if (!gaugeTarget) return;
+  async function stepCount(ingredient: Ingredient, delta: 1 | -1) {
     try {
-      const nextQuantity = gaugeLevelToQuantity(nextLevel);
-      if (nextQuantity < gaugeTarget.quantity) {
-        await decrementIngredientQuantity(gaugeTarget.id, gaugeTarget.quantity - nextQuantity);
+      if (delta < 0) {
+        // 期限バッチもFIFOで一緒に減らす
+        await decrementIngredientQuantity(ingredient.id, 1);
+      } else {
+        await updateIngredient({ ...ingredient, quantity: Math.round((ingredient.quantity + 1) * 10) / 10 });
       }
       notifyDataChanged();
-      setGaugeTarget({ ...gaugeTarget, quantity: nextQuantity });
+    } catch (e) {
+      showToast(toUserMessage(e, '更新に失敗しました'));
+    }
+  }
+
+  async function stepGauge(ingredient: Ingredient, delta: 1 | -1) {
+    try {
+      const nextLevel = Math.max(0, Math.min(10, gaugeLevelOf(ingredient) + delta));
+      const nextQuantity = gaugeLevelToQuantity(nextLevel);
+      if (nextQuantity < ingredient.quantity) {
+        await decrementIngredientQuantity(ingredient.id, ingredient.quantity - nextQuantity);
+      } else {
+        await updateIngredient({ ...ingredient, quantity: nextQuantity });
+      }
+      notifyDataChanged();
     } catch (e) {
       showToast(toUserMessage(e, '更新に失敗しました'));
     }
@@ -158,30 +159,30 @@ export function Home() {
   return (
     <>
       <Header
-        icon={<span style={{ fontSize: 22 }}>📦</span>}
+        icon={<div className="header-icon-box">📦</div>}
         title="ウチストック"
         subtitle={formatDateLabel(todayDateStr())}
         actions={
           <button
             className="icon-btn"
             aria-label="お知らせ"
-            style={{ position: 'relative' }}
+            style={{ position: 'relative', background: 'var(--color-surface)', boxShadow: 'var(--shadow-card)' }}
             onClick={() => setShowNotices(true)}
           >
-            <Bell size={20} />
+            <Bell size={18} />
             {unreadCount > 0 && (
               <span
                 style={{
                   position: 'absolute',
-                  top: 2,
-                  right: 2,
+                  top: -2,
+                  right: -2,
                   minWidth: 16,
                   height: 16,
                   padding: '0 3px',
                   borderRadius: 999,
                   background: 'var(--color-danger)',
                   color: '#fff',
-                  fontSize: 10,
+                  fontSize: 9,
                   fontWeight: 700,
                   display: 'flex',
                   alignItems: 'center',
@@ -197,58 +198,74 @@ export function Home() {
       />
       <div className="page-content">
         {alertParts.length > 0 && (
-          <button
-            className="card mb-16"
-            onClick={() => setShowNotices(true)}
-            style={{
-              width: '100%',
-              textAlign: 'left',
-              border: 'none',
-              cursor: 'pointer',
-              background: 'var(--color-danger)',
-              color: '#fff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              font: 'inherit',
-            }}
-          >
-            <span style={{ fontWeight: 700 }}>⚠ {alertParts.join('・')}</span>
-            <ChevronRight size={16} />
+          <button className="alert-chip" onClick={() => setShowNotices(true)}>
+            <span>⚠️ {alertParts.join('・')}</span>
+            <span>›</span>
           </button>
         )}
 
         <div className="card mb-16">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <div className="section-title" style={{ marginBottom: 0 }}>
-              🧺 在庫
-            </div>
-            <button className="btn-ghost btn btn-sm" onClick={() => navigate('/ingredients')}>
-              すべて見る <ChevronRight size={14} />
+          <div className="card-head">
+            <div className="card-title">🧺 在庫</div>
+            <button className="card-link" onClick={() => navigate('/ingredients')}>
+              すべて見る ›
             </button>
           </div>
-          <div style={{ display: 'flex', gap: 16, fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 8 }}>
-            <span>食品 {foodCount}品</span>
-            <span>日用品 {householdCount}品</span>
+          <div className="stock-meta">
+            食品 <b>{foodCount}</b>品　日用品 <b>{householdCount}</b>品
           </div>
           {topExpiring.length > 0 ? (
             <>
-              <div className="text-muted" style={{ fontSize: 11, marginBottom: 4 }}>
-                期限が近い順
-              </div>
+              <div className="sort-label">期限が近い順</div>
               {topExpiring.map(({ ingredient, days }) => {
-              const urgency = expiryUrgency(days);
-              return (
-                <div className="link-row" key={ingredient.id}>
-                  <span style={expiryUrgencyStyle(urgency)}>
-                    {expiryUrgencyIcon(urgency)}
-                    {ingredient.name}　{formatStock(ingredient)}
-                  </span>
-                  <button className="btn btn-outline btn-sm" onClick={() => handleQuickUse(ingredient)}>
-                    使った
-                  </button>
-                </div>
-              );
+                const urgency = expiryUrgency(days);
+                return (
+                  <div className="item-row" key={ingredient.id}>
+                    <div className="item-left">
+                      <div className="item-emoji">{categoryEmojiFor(ingredient)}</div>
+                      <div className="item-name">
+                        <span className="item-name-text">{ingredient.name}</span>
+                        <span className={`item-badge${urgency === 'soon' ? ' soon' : ''}`}>
+                          {expiryUrgencyIcon(urgency)}
+                          {formatExpiryRelative(days)}
+                        </span>
+                      </div>
+                    </div>
+                    {ingredient.quantityMode === 'gauge' ? (
+                      <div className="gauge-control">
+                        <button
+                          className="gauge-arrow"
+                          onClick={() => stepGauge(ingredient, -1)}
+                          aria-label="減らす"
+                          disabled={gaugeLevelOf(ingredient) <= 0}
+                        >
+                          ▾
+                        </button>
+                        <div className="gauge-track">
+                          <div className="gauge-fill" style={{ width: `${gaugeLevelOf(ingredient) * 10}%` }} />
+                        </div>
+                        <button
+                          className="gauge-arrow"
+                          onClick={() => stepGauge(ingredient, 1)}
+                          aria-label="増やす"
+                          disabled={gaugeLevelOf(ingredient) >= 10}
+                        >
+                          ▴
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="count-control">
+                        <button className="count-btn" onClick={() => stepCount(ingredient, -1)} aria-label="減らす">
+                          −
+                        </button>
+                        <span className="count-num">{formatStock(ingredient)}</span>
+                        <button className="count-btn" onClick={() => stepCount(ingredient, 1)} aria-label="増やす">
+                          ＋
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
               })}
             </>
           ) : (
@@ -258,63 +275,40 @@ export function Home() {
           )}
         </div>
 
-        <div className="fab-row">
-          {mealTrackingEnabled && (
-            <button className="fab orange" onClick={() => setShowMealForm('朝食')}>
-              <Utensils size={22} />
-              ＋ 食事を記録
-              <span style={{ fontWeight: 500, fontSize: 11, opacity: 0.9 }}>食べたものを記録</span>
-            </button>
-          )}
-          <button className="fab green" onClick={() => setShowPurchaseForm(true)}>
-            <ShoppingCart size={22} />
-            ＋ 買い物を記録
-            <span style={{ fontWeight: 500, fontSize: 11, opacity: 0.9 }}>買ったものを記録</span>
-          </button>
-          <button className="fab soft" onClick={() => setShowAddIngredient(true)}>
-            <Plus size={22} />
-            ＋ 在庫に追加
-            <span style={{ fontWeight: 500, fontSize: 11, opacity: 0.9 }}>貰い物など、金額を記録しない場合</span>
-          </button>
-          <button className="fab outline" onClick={() => setShowAddMemo(true)}>
-            <StickyNote size={22} />
-            ＋ メモ
-            <span style={{ fontWeight: 500, fontSize: 11, opacity: 0.9 }}>思いついたことを書く</span>
-          </button>
-        </div>
-
         <div className="card mb-16">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-            <span className="section-title" style={{ marginBottom: 0 }}>
-              {periodLabel}
-            </span>
-            <span className="text-muted" style={{ fontSize: 12 }}>
+          <div className="card-head">
+            <div className="card-title">🧾 {periodLabel}</div>
+            <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)', fontWeight: 700 }}>
               予算 ¥{budget.toLocaleString()}
-            </span>
+            </div>
           </div>
-          <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
+          <div className="text-muted" style={{ fontSize: 12 }}>
             {formatPeriodRangeLabel(period)}
           </div>
-          <div style={{ fontSize: 32, fontWeight: 800, marginTop: 6 }}>
+          <div className="budget-num display">
             ¥{used.toLocaleString()}
-            <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--color-text-muted)' }}>
-              {' '}
-              / ¥{budget.toLocaleString()}
-            </span>
+            <span> / ¥{budget.toLocaleString()}</span>
           </div>
-          <div className="progress-track">
-            <div className="progress-fill" style={{ width: `${progress}%` }} />
+          <div className="budget-bar-track">
+            <div className="budget-bar-fill" style={{ width: `${progress}%` }} />
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-            <span className={remaining < 0 ? '' : 'text-muted'} style={remaining < 0 ? { color: 'var(--color-danger)', fontWeight: 700 } : undefined}>
-              残り ¥{remaining.toLocaleString()}
+          <div className="budget-foot">
+            <span>
+              残り{' '}
+              <b style={remaining < 0 ? { color: 'var(--color-danger)' } : undefined}>
+                ¥{remaining.toLocaleString()}
+              </b>
             </span>
-            {remaining >= 0 && <span className="text-muted">1日あたり目安 ¥{perDay.toLocaleString()}</span>}
+            {remaining >= 0 && (
+              <span>
+                1日あたり目安 <b>¥{perDay.toLocaleString()}</b>
+              </span>
+            )}
           </div>
         </div>
 
         <div className="card mb-16">
-          <div className="section-title">
+          <div className="card-title" style={{ marginBottom: 12 }}>
             <ChefHat size={16} /> 調理済み
           </div>
           {cookedStock.length === 0 ? (
@@ -360,23 +354,65 @@ export function Home() {
         </div>
       </div>
 
+      {fabOpen && <button className="fab-backdrop" aria-label="閉じる" onClick={() => setFabOpen(false)} />}
+      <div className="fab-zone">
+        {fabOpen && (
+          <>
+            <button
+              className="fab-option"
+              onClick={() => {
+                setFabOpen(false);
+                setShowAddMemo(true);
+              }}
+            >
+              <span className="dot">📝</span>メモ
+            </button>
+            <button
+              className="fab-option"
+              onClick={() => {
+                setFabOpen(false);
+                setShowAddIngredient(true);
+              }}
+            >
+              <span className="dot">➕</span>在庫に追加
+            </button>
+            <button
+              className="fab-option"
+              onClick={() => {
+                setFabOpen(false);
+                setShowPurchaseForm(true);
+              }}
+            >
+              <span className="dot green">🛒</span>買い物を記録
+            </button>
+            {mealTrackingEnabled && (
+              <button
+                className="fab-option"
+                onClick={() => {
+                  setFabOpen(false);
+                  setShowMealForm('朝食');
+                }}
+              >
+                <span className="dot">🍽️</span>食事を記録
+              </button>
+            )}
+          </>
+        )}
+        <button
+          className={`fab-main${fabOpen ? ' open' : ''}`}
+          onClick={() => setFabOpen((v) => !v)}
+          aria-label={fabOpen ? '記録メニューを閉じる' : '記録メニューを開く'}
+        >
+          ＋
+        </button>
+      </div>
+
       {showMealForm && (
         <MealFormSheet initialMealType={showMealForm} onClose={() => setShowMealForm(null)} />
       )}
       {showPurchaseForm && <PurchaseFormSheet onClose={() => setShowPurchaseForm(false)} />}
       {showAddIngredient && <AddIngredientSheet onClose={() => setShowAddIngredient(false)} />}
       {showAddMemo && <MemoFormSheet onClose={() => setShowAddMemo(false)} />}
-      {gaugeTarget && (
-        <BottomSheet title={`${gaugeTarget.name}を使った`} onClose={() => setGaugeTarget(null)}>
-          <div className="field">
-            <label>残量</label>
-            <GaugeControl level={gaugeLevelOf(gaugeTarget)} onChange={handleGaugeTargetChange} />
-          </div>
-          <button className="btn btn-primary" onClick={() => setGaugeTarget(null)}>
-            完了
-          </button>
-        </BottomSheet>
-      )}
       {showNotices && (
         <ExpiryNoticeSheet
           notifications={notifications}

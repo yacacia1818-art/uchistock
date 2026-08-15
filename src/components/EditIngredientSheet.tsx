@@ -7,11 +7,9 @@ import { notifyDataChanged } from '../utils/bus';
 import { toUserMessage } from '../utils/errors';
 import { getEarliestExpiry } from '../utils/expiry';
 import { gaugeLevelOf, gaugeLevelToQuantity } from '../utils/quantity';
-import { UNIT_OPTIONS } from '../types';
-import type { HouseholdCategory, Ingredient, IngredientCategory, QuantityMode, ShoppingCategory } from '../types';
-
-const FOOD_CATEGORIES: IngredientCategory[] = ['野菜', '肉・魚', '卵・乳製品', '主食', 'その他'];
-const HOUSEHOLD_CATEGORIES: HouseholdCategory[] = ['洗剤・掃除用品', '衛生用品', '薬・医薬品', '文房具・雑貨', 'その他'];
+import { STORAGE_LOCATION_EMOJI } from '../utils/categoryEmoji';
+import { STORAGE_LOCATIONS, UNIT_OPTIONS } from '../types';
+import type { Ingredient, QuantityMode, StorageLocation } from '../types';
 
 interface EditIngredientSheetProps {
   ingredient: Ingredient;
@@ -23,8 +21,9 @@ export function EditIngredientSheet({ ingredient, onClose }: EditIngredientSheet
   const initialExpiry = getEarliestExpiry(ingredient) ?? '';
   const isKnownUnit = (UNIT_OPTIONS as readonly string[]).includes(ingredient.unit);
   const [name, setName] = useState(ingredient.name);
-  const [itemType, setItemType] = useState<ShoppingCategory>(ingredient.itemType ?? '食品');
-  const [category, setCategory] = useState<IngredientCategory | HouseholdCategory>(ingredient.category);
+  const [storageLocation, setStorageLocation] = useState<StorageLocation>(
+    ingredient.storageLocation ?? (ingredient.itemType === '日用品' ? '日用品' : '常温')
+  );
   const [unit, setUnit] = useState<string>(isKnownUnit ? ingredient.unit : 'その他');
   const [customUnit, setCustomUnit] = useState(isKnownUnit ? '' : ingredient.unit);
   const [quantity, setQuantity] = useState(ingredient.quantity);
@@ -35,13 +34,7 @@ export function EditIngredientSheet({ ingredient, onClose }: EditIngredientSheet
   const [expiryDate, setExpiryDate] = useState(initialExpiry);
   const [saving, setSaving] = useState(false);
 
-  const categories = itemType === '食品' ? FOOD_CATEGORIES : HOUSEHOLD_CATEGORIES;
   const resolvedUnit = unit === 'その他' ? customUnit.trim() || 'その他' : unit;
-
-  function handleItemTypeChange(next: ShoppingCategory) {
-    setItemType(next);
-    setCategory('その他');
-  }
 
   async function handleSave() {
     if (!name.trim()) {
@@ -52,15 +45,16 @@ export function EditIngredientSheet({ ingredient, onClose }: EditIngredientSheet
     try {
       const expiryChanged = expiryDate !== initialExpiry;
       const nextQuantity = quantityMode === 'gauge' ? gaugeLevelToQuantity(gaugeLevel) : Math.max(0, quantity);
+      const itemType = storageLocation === '日用品' ? '日用品' : '食品';
       await updateIngredient({
         ...ingredient,
         name: name.trim(),
-        category,
         itemType,
+        storageLocation,
         unit: resolvedUnit,
         quantity: nextQuantity,
         quantityMode,
-        // 日用品には期限概念がないため、区分を日用品に変えた場合は期限情報をクリアする
+        // 日用品には期限概念がないため、保管場所を日用品に変えた場合は期限情報をクリアする
         ...(itemType === '日用品'
           ? { expiryDate: undefined, expiryBatches: undefined }
           : expiryChanged
@@ -83,35 +77,20 @@ export function EditIngredientSheet({ ingredient, onClose }: EditIngredientSheet
   return (
     <BottomSheet title="在庫を編集" onClose={onClose}>
       <div className="field">
-        <label>区分</label>
-        <div className="chip-row">
-          {(['食品', '日用品'] as ShoppingCategory[]).map((t) => (
-            <button
-              key={t}
-              className={`chip${itemType === t ? ' active' : ''}`}
-              onClick={() => handleItemTypeChange(t)}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="field">
         <label>名前（必須）</label>
         <input className="input" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
       </div>
 
       <div className="field">
-        <label>カテゴリ</label>
+        <label>保管場所</label>
         <div className="chip-row">
-          {categories.map((c) => (
+          {STORAGE_LOCATIONS.map((loc) => (
             <button
-              key={c}
-              className={`chip${category === c ? ' active' : ''}`}
-              onClick={() => setCategory(c)}
+              key={loc}
+              className={`chip${storageLocation === loc ? ' active' : ''}`}
+              onClick={() => setStorageLocation(loc)}
             >
-              {c}
+              {STORAGE_LOCATION_EMOJI[loc]} {loc}
             </button>
           ))}
         </div>
@@ -149,11 +128,6 @@ export function EditIngredientSheet({ ingredient, onClose }: EditIngredientSheet
             </button>
           ))}
         </div>
-        <p className="text-muted mt-8" style={{ fontSize: 12 }}>
-          {quantityMode === 'count'
-            ? '卵・パックなど数で数えられる品目向け'
-            : '調味料・洗剤など少しずつ使う品目向け'}
-        </p>
       </div>
 
       {quantityMode === 'count' ? (
@@ -175,7 +149,7 @@ export function EditIngredientSheet({ ingredient, onClose }: EditIngredientSheet
         </div>
       )}
 
-      {itemType === '食品' && (
+      {storageLocation !== '日用品' && (
         <div className="field">
           <label>期限（任意）</label>
           <input

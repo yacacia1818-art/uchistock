@@ -1,90 +1,52 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Package, Plus, Search, ShoppingCart } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { ChevronRight, Package, Plus, Search } from 'lucide-react';
 import { Header } from '../components/Header';
 import { IngredientRow } from '../components/IngredientRow';
 import { AddIngredientSheet } from '../components/AddIngredientSheet';
 import { EditIngredientSheet } from '../components/EditIngredientSheet';
-import { AddMemoSheet } from '../components/AddMemoSheet';
-import { PurchaseFormSheet } from '../components/PurchaseFormSheet';
 import { listIngredients } from '../repositories/ingredientRepo';
-import {
-  listShoppingMemo,
-  toggleShoppingMemoChecked,
-  deleteShoppingMemoItem,
-} from '../repositories/shoppingMemoRepo';
 import { useDataVersion } from '../hooks/useDataVersion';
 import { useToast } from '../components/ToastProvider';
-import { notifyDataChanged } from '../utils/bus';
 import { toUserMessage } from '../utils/errors';
-import { formatMemoQuantity } from '../utils/quantity';
-import type { HouseholdCategory, Ingredient, IngredientCategory, ShoppingCategory, ShoppingMemoItem } from '../types';
+import { STORAGE_LOCATION_EMOJI } from '../utils/categoryEmoji';
+import { STORAGE_LOCATIONS } from '../types';
+import type { Ingredient, StorageLocation } from '../types';
 
-const FOOD_CATEGORIES: IngredientCategory[] = ['野菜', '肉・魚', '卵・乳製品', '主食', 'その他'];
-const HOUSEHOLD_CATEGORIES: HouseholdCategory[] = ['洗剤・掃除用品', '衛生用品', '薬・医薬品', '文房具・雑貨', 'その他'];
-const ITEM_TYPES: (ShoppingCategory | 'すべて')[] = ['すべて', '食品', '日用品'];
+const FILTERS: (StorageLocation | 'すべて')[] = ['すべて', ...STORAGE_LOCATIONS];
 
 export function Ingredients() {
+  const navigate = useNavigate();
   const { showToast } = useToast();
   const version = useDataVersion();
-  const [tab, setTab] = useState<'inventory' | 'memo'>('inventory');
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
-  const [memo, setMemo] = useState<ShoppingMemoItem[]>([]);
   const [search, setSearch] = useState('');
-  const [itemType, setItemType] = useState<ShoppingCategory | 'すべて'>('すべて');
-  const [category, setCategory] = useState<IngredientCategory | HouseholdCategory | 'すべて'>('すべて');
+  const [filter, setFilter] = useState<StorageLocation | 'すべて'>('すべて');
   const [showAddIngredient, setShowAddIngredient] = useState(false);
   const [editingIngredient, setEditingIngredient] = useState<Ingredient | null>(null);
-  const [showAddMemoOpen, setShowAddMemoOpen] = useState(false);
-  const [showPurchaseCarry, setShowPurchaseCarry] = useState(false);
 
   useEffect(() => {
-    Promise.all([listIngredients(), listShoppingMemo()])
-      .then(([ing, m]) => {
-        setIngredients(ing);
-        setMemo(m);
-      })
+    listIngredients()
+      .then(setIngredients)
       .catch((e) => showToast(toUserMessage(e, 'データの読み込みに失敗しました')));
   }, [version, showToast]);
 
-  function handleItemTypeChange(next: ShoppingCategory | 'すべて') {
-    setItemType(next);
-    setCategory('すべて');
-  }
-
-  const categoryOptions =
-    itemType === '日用品' ? HOUSEHOLD_CATEGORIES : itemType === '食品' ? FOOD_CATEGORIES : [];
-
   const filteredIngredients = useMemo(() => {
     return ingredients.filter((i) => {
-      const type = i.itemType ?? '食品';
-      if (itemType !== 'すべて' && type !== itemType) return false;
-      if (category !== 'すべて' && i.category !== category) return false;
+      const loc = i.storageLocation ?? '常温';
+      if (filter !== 'すべて' && loc !== filter) return false;
       if (search.trim() && !i.name.includes(search.trim())) return false;
       return true;
     });
-  }, [ingredients, itemType, category, search]);
+  }, [ingredients, filter, search]);
 
-  const uncheckedMemo = memo.filter((m) => !m.checked);
-  const checkedMemo = memo.filter((m) => m.checked);
-
-  async function handleToggleMemo(item: ShoppingMemoItem) {
-    try {
-      await toggleShoppingMemoChecked(item.id, !item.checked);
-      notifyDataChanged();
-    } catch (e) {
-      showToast(toUserMessage(e, '更新に失敗しました'));
-    }
-  }
-
-  async function handleDeleteMemo(id: string) {
-    try {
-      await deleteShoppingMemoItem(id);
-      notifyDataChanged();
-      showToast('削除しました');
-    } catch (e) {
-      showToast(toUserMessage(e, '削除に失敗しました'));
-    }
-  }
+  const grouped = useMemo(() => {
+    if (filter !== 'すべて') return null;
+    const map = new Map<StorageLocation, Ingredient[]>();
+    for (const loc of STORAGE_LOCATIONS) map.set(loc, []);
+    for (const i of filteredIngredients) map.get(i.storageLocation ?? '常温')!.push(i);
+    return map;
+  }, [filteredIngredients, filter]);
 
   return (
     <>
@@ -92,139 +54,78 @@ export function Ingredients() {
         icon={<Package size={20} />}
         title="在庫"
         actions={
-          tab === 'inventory' ? (
-            <button className="btn btn-primary btn-sm" onClick={() => setShowAddIngredient(true)}>
-              <Plus size={16} /> 在庫を追加
-            </button>
-          ) : (
-            <button className="btn btn-primary btn-sm" onClick={() => setShowAddMemoOpen(true)}>
-              <Plus size={16} /> 追加
-            </button>
-          )
+          <button className="btn btn-primary btn-sm" onClick={() => setShowAddIngredient(true)}>
+            <Plus size={16} /> 追加する
+          </button>
         }
       />
       <div className="page-content">
-        <div className="tabs">
-          <button className={`tab${tab === 'inventory' ? ' active' : ''}`} onClick={() => setTab('inventory')}>
-            在庫一覧
-          </button>
-          <button className={`tab${tab === 'memo' ? ' active' : ''}`} onClick={() => setTab('memo')}>
-            買い物メモ
-            {uncheckedMemo.length > 0 && <span className="badge">{uncheckedMemo.length}</span>}
-          </button>
+        <div className="search-input-wrap mb-16">
+          <Search size={16} className="search-icon" />
+          <input
+            className="input"
+            placeholder="在庫を検索"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <div className="chip-row">
+          {FILTERS.map((f) => (
+            <button key={f} className={`chip${filter === f ? ' active' : ''}`} onClick={() => setFilter(f)}>
+              {f !== 'すべて' && `${STORAGE_LOCATION_EMOJI[f]} `}
+              {f}
+            </button>
+          ))}
         </div>
 
-        {tab === 'inventory' ? (
-          <>
-            <div className="search-input-wrap mb-16">
-              <Search size={16} className="search-icon" />
-              <input
-                className="input"
-                placeholder="在庫を検索"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
-            <div className="chip-row">
-              {ITEM_TYPES.map((t) => (
-                <button
-                  key={t}
-                  className={`chip${itemType === t ? ' active' : ''}`}
-                  onClick={() => handleItemTypeChange(t)}
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
-            {categoryOptions.length > 0 && (
-              <div className="chip-row">
-                {(['すべて', ...categoryOptions] as const).map((c) => (
-                  <button
-                    key={c}
-                    className={`chip${category === c ? ' active' : ''}`}
-                    onClick={() => setCategory(c)}
-                  >
-                    {c}
-                  </button>
-                ))}
-              </div>
-            )}
-            <div className="card">
-              {filteredIngredients.length === 0 ? (
-                <div className="empty-state">まだ在庫が登録されていません</div>
-              ) : (
-                filteredIngredients.map((i) => (
-                  <IngredientRow key={i.id} ingredient={i} onEdit={(ing) => setEditingIngredient(ing)} />
-                ))
-              )}
-            </div>
-            <p className="text-muted mt-8" style={{ fontSize: 12 }}>
-              ※ 数量は調理・食事の記録時に自動で減っていきます。＋/−でも調整できます。
-            </p>
-          </>
-        ) : (
-          <>
-            <div className="card mb-16">
-              {memo.length === 0 ? (
-                <div className="empty-state">買い物メモはまだありません</div>
-              ) : (
-                <>
-                  {uncheckedMemo.map((item) => (
-                    <label className="checkbox-row" key={item.id}>
-                      <input type="checkbox" checked={false} onChange={() => handleToggleMemo(item)} />
-                      <span style={{ flex: 1 }}>
-                        {item.category === '日用品' && <span className="text-muted">🧻 </span>}
-                        {item.name}
-                        {formatMemoQuantity(item) && (
-                          <span className="text-muted"> ・{formatMemoQuantity(item)}</span>
-                        )}
-                        {item.memo && <div className="row-sub">{item.memo}</div>}
-                      </span>
-                      <button
-                        className="icon-btn"
-                        onClick={() => handleDeleteMemo(item.id)}
-                        aria-label="削除"
-                        style={{ fontSize: 12, color: 'var(--color-text-muted)' }}
-                      >
-                        削除
-                      </button>
-                    </label>
+        {grouped ? (
+          [...grouped.entries()].map(([loc, items]) =>
+            items.length === 0 ? null : (
+              <div key={loc} className="mb-16">
+                <div className="section-title" style={{ marginBottom: 8 }}>
+                  {STORAGE_LOCATION_EMOJI[loc]} {loc}
+                </div>
+                <div className="card">
+                  {items.map((i) => (
+                    <IngredientRow key={i.id} ingredient={i} onEdit={(ing) => setEditingIngredient(ing)} />
                   ))}
-                  {checkedMemo.length > 0 && (
-                    <>
-                      <div className="text-muted" style={{ fontSize: 12, margin: '10px 0 4px' }}>
-                        購入済み
-                      </div>
-                      {checkedMemo.map((item) => (
-                        <label className="checkbox-row" key={item.id}>
-                          <input type="checkbox" checked={true} onChange={() => handleToggleMemo(item)} />
-                          <span style={{ flex: 1, textDecoration: 'line-through', color: 'var(--color-text-muted)' }}>
-                            {item.name}
-                            {formatMemoQuantity(item) && <span> ・{formatMemoQuantity(item)}</span>}
-                          </span>
-                        </label>
-                      ))}
-                    </>
-                  )}
-                </>
-              )}
-            </div>
-            {checkedMemo.length > 0 && (
-              <button className="btn btn-secondary" onClick={() => setShowPurchaseCarry(true)}>
-                <ShoppingCart size={16} /> 購入済み商品を買い物記録へ（{checkedMemo.length}件）
-              </button>
+                </div>
+              </div>
+            )
+          )
+        ) : (
+          <div className="card">
+            {filteredIngredients.length === 0 ? (
+              <div className="empty-state">まだ在庫が登録されていません</div>
+            ) : (
+              filteredIngredients.map((i) => (
+                <IngredientRow key={i.id} ingredient={i} onEdit={(ing) => setEditingIngredient(ing)} />
+              ))
             )}
-          </>
+          </div>
         )}
+
+        {filteredIngredients.length === 0 && grouped && (
+          <div className="card">
+            <div className="empty-state">まだ在庫が登録されていません</div>
+          </div>
+        )}
+
+        <button
+          className="link-row"
+          style={{ width: '100%', border: 'none', background: 'none', font: 'inherit' }}
+          onClick={() => navigate('/records')}
+        >
+          <span className="text-muted" style={{ fontSize: 13 }}>
+            📜 変化履歴を見る
+          </span>
+          <ChevronRight size={16} className="text-muted" />
+        </button>
       </div>
 
       {showAddIngredient && <AddIngredientSheet onClose={() => setShowAddIngredient(false)} />}
       {editingIngredient && (
         <EditIngredientSheet ingredient={editingIngredient} onClose={() => setEditingIngredient(null)} />
-      )}
-      {showAddMemoOpen && <AddMemoSheet onClose={() => setShowAddMemoOpen(false)} />}
-      {showPurchaseCarry && (
-        <PurchaseFormSheet carriedItems={checkedMemo} onClose={() => setShowPurchaseCarry(false)} />
       )}
     </>
   );

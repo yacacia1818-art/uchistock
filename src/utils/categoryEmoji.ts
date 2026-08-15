@@ -20,3 +20,11 @@ export function categoryEmojiFor(ingredient: Pick<Ingredient, 'category' | 'item
   const map = ingredient.itemType === '日用品' ? HOUSEHOLD_CATEGORY_EMOJI : INGREDIENT_CATEGORY_EMOJI;
   return map[ingredient.category] ?? map['その他'];
 }
+
+// v1.8: 在庫画面の主分類（保管場所）のアイコン
+export const STORAGE_LOCATION_EMOJI: Record<string, string> = {
+  冷蔵: '🧊',
+  冷凍: '❄️',
+  常温: '🗄️',
+  日用品: '🧴',
+};

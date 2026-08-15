@@ -1,6 +1,6 @@
 import { getDB } from '../db/db';
 import { GAUGE_MAX, STOCK_LEVEL_TO_GAUGE } from '../types';
-import type { Ingredient, LegacyQuantityMode, QuantityMode } from '../types';
+import type { Ingredient, IngredientCategory, LegacyQuantityMode, QuantityMode, StorageLocation } from '../types';
 import { generateId } from '../utils/id';
 import { nowIsoStr } from '../utils/date';
 import { AppError } from '../utils/errors';
@@ -30,19 +30,38 @@ function normalizeQuantityMode(ingredient: Ingredient, quantity: number): { quan
   return { quantityMode: 'count', gaugeLevel: undefined, quantity };
 }
 
+// v1.8: 旧・食品カテゴリ（5分類）から保管場所への初回変換の目安。
+// 一般的な家庭での保管習慣に基づく既定値で、実際と異なる場合は編集画面でいつでも変更できる
+const FOOD_CATEGORY_TO_STORAGE: Record<IngredientCategory, StorageLocation> = {
+  野菜: '冷蔵',
+  '肉・魚': '冷凍',
+  '卵・乳製品': '冷蔵',
+  主食: '常温',
+  その他: '常温',
+};
+
+function normalizeStorageLocation(ingredient: Ingredient): StorageLocation {
+  if (ingredient.storageLocation) return ingredient.storageLocation;
+  if (ingredient.itemType === '日用品') return '日用品';
+  const category = ingredient.category as IngredientCategory;
+  return FOOD_CATEGORY_TO_STORAGE[category] ?? '常温';
+}
+
 function normalize(ingredient: Ingredient): Ingredient {
   const baseQuantity = typeof ingredient.quantity === 'number' ? ingredient.quantity : (ingredient.count ?? 0);
   const trimmedUnit = normalizeUnit(ingredient.unit);
   const { quantityMode, gaugeLevel, quantity } = normalizeQuantityMode(ingredient, baseQuantity);
+  const storageLocation = normalizeStorageLocation(ingredient);
   if (
     ingredient.quantity === quantity &&
     ingredient.unit === trimmedUnit &&
     ingredient.quantityMode === quantityMode &&
-    ingredient.gaugeLevel === gaugeLevel
+    ingredient.gaugeLevel === gaugeLevel &&
+    ingredient.storageLocation === storageLocation
   ) {
     return ingredient;
   }
-  return { ...ingredient, quantity, unit: trimmedUnit, quantityMode, gaugeLevel };
+  return { ...ingredient, quantity, unit: trimmedUnit, quantityMode, gaugeLevel, storageLocation };
 }
 
 export async function listIngredients(): Promise<Ingredient[]> {

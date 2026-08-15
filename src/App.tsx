@@ -3,6 +3,7 @@ import { BottomNav } from './components/BottomNav';
 import { ToastProvider } from './components/ToastProvider';
 import { Home } from './pages/Home';
 import { Ingredients } from './pages/Ingredients';
+import { Shopping } from './pages/Shopping';
 import { Records } from './pages/Records';
 import { CalendarPage } from './pages/CalendarPage';
 import { More } from './pages/More';
@@ -20,6 +21,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/ingredients" element={<Ingredients />} />
+            <Route path="/shopping" element={<Shopping />} />
             <Route path="/records" element={<Records />} />
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/more" element={<More />} />

@@ -1,16 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { BottomSheet } from './BottomSheet';
 import { GaugeControl } from './GaugeControl';
-import { addIngredient } from '../repositories/ingredientRepo';
+import { addIngredient, listIngredients } from '../repositories/ingredientRepo';
 import { useToast } from './ToastProvider';
 import { notifyDataChanged } from '../utils/bus';
 import { toUserMessage } from '../utils/errors';
 import { gaugeLevelToQuantity } from '../utils/quantity';
-import { UNIT_OPTIONS } from '../types';
-import type { HouseholdCategory, IngredientCategory, QuantityMode, ShoppingCategory } from '../types';
-
-const FOOD_CATEGORIES: IngredientCategory[] = ['野菜', '肉・魚', '卵・乳製品', '主食', 'その他'];
-const HOUSEHOLD_CATEGORIES: HouseholdCategory[] = ['洗剤・掃除用品', '衛生用品', '薬・医薬品', '文房具・雑貨', 'その他'];
+import { STORAGE_LOCATION_EMOJI } from '../utils/categoryEmoji';
+import { STORAGE_LOCATIONS, UNIT_OPTIONS } from '../types';
+import type { Ingredient, QuantityMode, StorageLocation } from '../types';
 
 interface AddIngredientSheetProps {
   onClose: () => void;
@@ -18,9 +16,10 @@ interface AddIngredientSheetProps {
 
 export function AddIngredientSheet({ onClose }: AddIngredientSheetProps) {
   const { showToast } = useToast();
+  const [known, setKnown] = useState<Ingredient[]>([]);
   const [name, setName] = useState('');
-  const [itemType, setItemType] = useState<ShoppingCategory>('食品');
-  const [category, setCategory] = useState<IngredientCategory | HouseholdCategory>('その他');
+  const [matchedFrom, setMatchedFrom] = useState<Ingredient | null>(null);
+  const [storageLocation, setStorageLocation] = useState<StorageLocation>('冷蔵');
   const [unit, setUnit] = useState<string>('個');
   const [customUnit, setCustomUnit] = useState('');
   const [quantity, setQuantity] = useState(1);
@@ -29,12 +28,38 @@ export function AddIngredientSheet({ onClose }: AddIngredientSheetProps) {
   const [expiryDate, setExpiryDate] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const categories = itemType === '食品' ? FOOD_CATEGORIES : HOUSEHOLD_CATEGORIES;
+  useEffect(() => {
+    listIngredients()
+      .then(setKnown)
+      .catch(() => {
+        // オートコンプリート用の候補取得。失敗しても新規入力は妨げない
+      });
+  }, []);
+
+  const suggestions = useMemo(() => {
+    const q = name.trim();
+    if (!q || matchedFrom) return [];
+    const seen = new Set<string>();
+    return known
+      .filter((i) => i.name.includes(q) && !seen.has(i.name) && seen.add(i.name))
+      .slice(0, 5);
+  }, [name, known, matchedFrom]);
+
   const resolvedUnit = unit === 'その他' ? customUnit.trim() || 'その他' : unit;
 
-  function handleItemTypeChange(next: ShoppingCategory) {
-    setItemType(next);
-    setCategory('その他');
+  function applySuggestion(ing: Ingredient) {
+    setName(ing.name);
+    setMatchedFrom(ing);
+    setStorageLocation(ing.storageLocation ?? (ing.itemType === '日用品' ? '日用品' : '常温'));
+    const isKnownUnit = (UNIT_OPTIONS as readonly string[]).includes(ing.unit);
+    setUnit(isKnownUnit ? ing.unit : 'その他');
+    setCustomUnit(isKnownUnit ? '' : ing.unit);
+    setQuantityMode(ing.quantityMode === 'gauge' ? 'gauge' : 'count');
+    if (ing.quantityMode === 'gauge') {
+      setGaugeLevel(10);
+    } else {
+      setQuantity(1);
+    }
   }
 
   async function handleSave() {
@@ -44,10 +69,12 @@ export function AddIngredientSheet({ onClose }: AddIngredientSheetProps) {
     }
     setSaving(true);
     try {
+      const itemType = storageLocation === '日用品' ? '日用品' : '食品';
       await addIngredient({
         name: name.trim(),
-        category,
+        category: 'その他',
         itemType,
+        storageLocation,
         unit: resolvedUnit,
         quantity: quantityMode === 'gauge' ? gaugeLevelToQuantity(gaugeLevel) : quantity,
         quantityMode,
@@ -65,40 +92,48 @@ export function AddIngredientSheet({ onClose }: AddIngredientSheetProps) {
   }
 
   return (
-    <BottomSheet title="在庫を追加" onClose={onClose}>
+    <BottomSheet title="追加する" onClose={onClose}>
       <p className="text-muted mb-16" style={{ fontSize: 12 }}>
-        ※ ここでは金額を記録せず在庫だけ増やします。購入した商品を金額も記録したい場合は「買い物を記録」をご利用ください。
+        ※ 買った・貰った を区別する必要はありません。ここでは金額を記録せず在庫だけ増やします。
       </p>
-      <div className="field">
-        <label>区分</label>
-        <div className="chip-row">
-          {(['食品', '日用品'] as ShoppingCategory[]).map((t) => (
-            <button
-              key={t}
-              className={`chip${itemType === t ? ' active' : ''}`}
-              onClick={() => handleItemTypeChange(t)}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
-      </div>
 
       <div className="field">
         <label>名前（必須）</label>
-        <input className="input" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+        <input
+          className="input"
+          value={name}
+          onChange={(e) => {
+            setName(e.target.value);
+            if (matchedFrom && e.target.value !== matchedFrom.name) setMatchedFrom(null);
+          }}
+          autoFocus
+        />
+        {suggestions.length > 0 && (
+          <div className="chip-row mt-8" style={{ marginBottom: 0 }}>
+            {suggestions.map((s) => (
+              <button key={s.id} className="chip" onClick={() => applySuggestion(s)}>
+                {STORAGE_LOCATION_EMOJI[s.storageLocation ?? '常温']} {s.name}
+              </button>
+            ))}
+          </div>
+        )}
+        {matchedFrom && (
+          <p className="text-muted mt-8" style={{ fontSize: 12 }}>
+            ✓ 前回の設定（保管場所・単位・管理方式）を使っています
+          </p>
+        )}
       </div>
 
       <div className="field">
-        <label>カテゴリ</label>
+        <label>保管場所</label>
         <div className="chip-row">
-          {categories.map((c) => (
+          {STORAGE_LOCATIONS.map((loc) => (
             <button
-              key={c}
-              className={`chip${category === c ? ' active' : ''}`}
-              onClick={() => setCategory(c)}
+              key={loc}
+              className={`chip${storageLocation === loc ? ' active' : ''}`}
+              onClick={() => setStorageLocation(loc)}
             >
-              {c}
+              {STORAGE_LOCATION_EMOJI[loc]} {loc}
             </button>
           ))}
         </div>
@@ -136,11 +171,6 @@ export function AddIngredientSheet({ onClose }: AddIngredientSheetProps) {
             </button>
           ))}
         </div>
-        <p className="text-muted mt-8" style={{ fontSize: 12 }}>
-          {quantityMode === 'count'
-            ? '卵・パックなど数で数えられる品目向け'
-            : '調味料・洗剤など少しずつ使う品目向け'}
-        </p>
       </div>
 
       {quantityMode === 'count' ? (
@@ -162,7 +192,7 @@ export function AddIngredientSheet({ onClose }: AddIngredientSheetProps) {
         </div>
       )}
 
-      {itemType === '食品' && (
+      {storageLocation !== '日用品' && (
         <div className="field">
           <label>期限（任意）</label>
           <input

@@ -37,6 +37,12 @@ export const STOCK_LEVEL_TO_GAUGE: Record<StockLevel, number> = {
   切れそう: 1,
 };
 
+// v1.8: 在庫の主分類。ユーザーが「これは何カテゴリ？」と迷わないよう、
+// 判断コストの低い保管場所を軸にする（食品5分類+日用品5分類の2段階選択は廃止）。
+// 未設定の既存データはingredientRepo.normalize()でcategory/itemTypeから非破壊に導出する
+export const STORAGE_LOCATIONS = ['冷蔵', '冷凍', '常温', '日用品'] as const;
+export type StorageLocation = (typeof STORAGE_LOCATIONS)[number];
+
 // 期限バッチ：購入ごとの期限と数量を保持する（古い期限を失わないため）
 export interface ExpiryBatch {
   date: string; // YYYY-MM-DD
@@ -68,6 +74,8 @@ export interface Ingredient {
   stockLevel?: StockLevel;
   // v1.7: quantityMode==='gauge'のときの10段階の目安値（0〜10）。quantityは互換性のためgaugeLevel/10を保持する
   gaugeLevel?: number;
+  // v1.8: 保管場所（在庫画面の主分類）。未設定の既存データはcategory/itemTypeから導出する
+  storageLocation?: StorageLocation;
 }
 
 export type ShoppingCategory = '食品' | '日用品';

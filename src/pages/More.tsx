@@ -12,6 +12,10 @@ import {
   Settings as SettingsIcon,
   Star,
   StickyNote,
+  Calendar,
+  History,
+  Bot,
+  HelpCircle,
 } from 'lucide-react';
 import { Header } from '../components/Header';
 import { listRecipes } from '../repositories/recipeRepo';
@@ -46,6 +50,7 @@ export function More() {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [memos, setMemos] = useState<Memo[]>([]);
   const [copying, setCopying] = useState(false);
+  const [showAiConsult, setShowAiConsult] = useState(false);
 
   useEffect(() => {
     listRecipes()
@@ -74,6 +79,9 @@ export function More() {
     <>
       <Header icon={<MoreHorizontal size={20} />} title="その他" />
       <div className="page-content">
+        <div className="text-muted" style={{ fontSize: 12, fontWeight: 700, margin: '0 0 8px 4px' }}>
+          日常的に使う
+        </div>
         <div className="card mb-16">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <div className="section-title" style={{ marginBottom: 0 }}>
@@ -141,31 +149,74 @@ export function More() {
         </div>
 
         <div className="card mb-16">
-          <div className="section-title">🤖 AI相談用コピー</div>
-          <p className="text-muted mb-16" style={{ fontSize: 13 }}>
-            ChatGPTなどのAIに相談するときに使える情報をコピーします。
-          </p>
-          <div className="grid-2">
-            {AI_BUTTONS.map(({ topic, label, icon: Icon }) => (
-              <button
-                key={topic}
-                className="fab"
-                style={{ background: 'var(--color-primary-soft)', color: 'var(--color-primary-dark)' }}
-                onClick={() => handleCopy(topic)}
-                disabled={copying}
-              >
-                <Icon size={20} />
-                {label}
-              </button>
-            ))}
-          </div>
-          <button className="btn btn-outline mt-8" onClick={() => handleCopy('all')} disabled={copying}>
-            すべての情報をコピー
+          <button
+            className="link-row"
+            style={{ width: '100%', border: 'none', background: 'none', font: 'inherit', borderBottom: 'none' }}
+            onClick={() => navigate('/calendar')}
+          >
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Calendar size={16} /> カレンダー
+            </span>
+            <ChevronRight size={16} className="text-muted" />
           </button>
         </div>
 
+        <div className="text-muted" style={{ fontSize: 12, fontWeight: 700, margin: '8px 0 8px 4px' }}>
+          たまに使う
+        </div>
+        <div className="card mb-16">
+          <button
+            className="link-row"
+            style={{ width: '100%', border: 'none', background: 'none', font: 'inherit' }}
+            onClick={() => navigate('/records')}
+          >
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <History size={16} /> 履歴（購入・食事・調理）
+            </span>
+            <ChevronRight size={16} className="text-muted" />
+          </button>
+          <button
+            className="link-row"
+            style={{ width: '100%', border: 'none', background: 'none', font: 'inherit', borderBottom: 'none' }}
+            onClick={() => setShowAiConsult((v) => !v)}
+          >
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Bot size={16} /> ChatGPT用データ出力
+            </span>
+            <ChevronRight size={16} className="text-muted" style={{ transform: showAiConsult ? 'rotate(90deg)' : undefined }} />
+          </button>
+        </div>
+
+        {showAiConsult && (
+          <div className="card mb-16">
+            <p className="text-muted mb-16" style={{ fontSize: 13 }}>
+              ChatGPTなどのAIに相談するときに使える情報をコピーします。
+            </p>
+            <div className="grid-2">
+              {AI_BUTTONS.map(({ topic, label, icon: Icon }) => (
+                <button
+                  key={topic}
+                  className="fab"
+                  style={{ background: 'var(--color-primary-soft)', color: 'var(--color-primary-dark)' }}
+                  onClick={() => handleCopy(topic)}
+                  disabled={copying}
+                >
+                  <Icon size={20} />
+                  {label}
+                </button>
+              ))}
+            </div>
+            <button className="btn btn-outline mt-8" onClick={() => handleCopy('all')} disabled={copying}>
+              すべての情報をコピー
+            </button>
+          </div>
+        )}
+
+        <div className="text-muted" style={{ fontSize: 12, fontWeight: 700, margin: '8px 0 8px 4px' }}>
+          設定・サポート
+        </div>
         <div className="card">
-          <button className="link-row" style={{ width: '100%', border: 'none', background: 'none', font: 'inherit', borderBottom: '1px solid var(--color-border)' }} onClick={() => navigate('/settings')}>
+          <button className="link-row" style={{ width: '100%', border: 'none', background: 'none', font: 'inherit' }} onClick={() => navigate('/settings')}>
             <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <SettingsIcon size={16} /> 設定
             </span>
@@ -176,6 +227,11 @@ export function More() {
               <Info size={16} /> このアプリについて
             </span>
             <ChevronRight size={16} className="text-muted" />
+          </button>
+          <button className="link-row" style={{ width: '100%', border: 'none', background: 'none', font: 'inherit', borderBottom: 'none' }} disabled>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--color-text-muted)' }}>
+              <HelpCircle size={16} /> 使い方・FAQ（準備中）
+            </span>
           </button>
         </div>
       </div>

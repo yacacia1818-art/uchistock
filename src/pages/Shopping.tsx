@@ -5,7 +5,7 @@ import { ShoppingMemoPanel } from '../components/ShoppingMemoPanel';
 export function Shopping() {
   return (
     <>
-      <Header icon={<ShoppingCart size={20} />} title="買い物" />
+      <Header icon={<ShoppingCart size={20} />} title="買い物メモ" />
       <div className="page-content">
         <ShoppingMemoPanel />
       </div>

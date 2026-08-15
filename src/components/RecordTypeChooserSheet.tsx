@@ -12,7 +12,7 @@ interface RecordTypeChooserSheetProps {
 const CHOICES: { choice: RecordChoice; label: string; icon: typeof Utensils }[] = [
   { choice: 'meal', label: '食事', icon: Utensils },
   { choice: 'cooking', label: '調理', icon: ChefHat },
-  { choice: 'purchase', label: '買い物', icon: ShoppingCart },
+  { choice: 'purchase', label: '購入', icon: ShoppingCart },
 ];
 
 export function RecordTypeChooserSheet({ onClose, onChoose, mealTrackingEnabled = true }: RecordTypeChooserSheetProps) {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, StickyNote, Utensils, Plus } from 'lucide-react';
+import { Check, StickyNote, Utensils, Plus } from 'lucide-react';
 import { Header } from '../components/Header';
 import { MealFormSheet } from '../components/MealFormSheet';
 import { AddIngredientSheet } from '../components/AddIngredientSheet';
@@ -100,43 +100,20 @@ export function Home() {
         icon={<div className="header-icon-box">📦</div>}
         title="ウチストック"
         subtitle={formatDateLabel(todayDateStr())}
-        actions={
-          <button
-            className="icon-btn"
-            aria-label="お知らせ"
-            style={{ position: 'relative', background: 'var(--color-surface)', boxShadow: 'var(--shadow-card)' }}
-            onClick={() => setShowNotices(true)}
-          >
-            <Bell size={18} />
-            {unreadCount > 0 && (
-              <span
-                style={{
-                  position: 'absolute',
-                  top: -2,
-                  right: -2,
-                  minWidth: 16,
-                  height: 16,
-                  padding: '0 3px',
-                  borderRadius: 999,
-                  background: 'var(--color-danger)',
-                  color: '#fff',
-                  fontSize: 9,
-                  fontWeight: 700,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  lineHeight: 1,
-                }}
-              >
-                {unreadCount}
-              </span>
-            )}
-          </button>
-        }
       />
       <div className="page-content">
         <div className="card mb-16">
-          <div className="card-title" style={{ marginBottom: 12 }}>期限のお知らせ</div>
+          <div className="card-head" style={{ marginBottom: 12 }}>
+            <div className="card-title">期限のお知らせ</div>
+            {unreadCount > 0 && (
+              <button
+                className="btn btn-outline btn-sm"
+                onClick={() => setShowNotices(true)}
+              >
+                <Check size={13} /> {unreadCount}件を確認
+              </button>
+            )}
+          </div>
           {urgent.length === 0 ? (
             <p className="text-muted" style={{ fontSize: 13 }}>今日は特に気にするものはありません</p>
           ) : (
@@ -181,7 +158,7 @@ export function Home() {
 
         <button className="card mb-16" style={{ width: '100%', textAlign: 'left', border: 'none', font: 'inherit', cursor: 'pointer' }} onClick={() => navigate('/shopping')}>
           <div className="card-head" style={{ marginBottom: memo.length > 0 ? 6 : 0 }}>
-            <div className="card-title">🛒 買い物　{memo.length}件</div>
+            <div className="card-title">🛒 買い物メモ　{memo.length}件</div>
             <span className="card-link">›</span>
           </div>
           {memo.length > 0 && (

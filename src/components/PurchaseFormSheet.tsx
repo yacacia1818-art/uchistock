@@ -168,7 +168,7 @@ export function PurchaseFormSheet({ onClose, carriedItems }: PurchaseFormSheetPr
   }
 
   return (
-    <BottomSheet title="買い物を記録" onClose={onClose}>
+    <BottomSheet title="購入を記録" onClose={onClose}>
       <div className="field">
         <label>合計金額（必須）</label>
         <input

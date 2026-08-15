@@ -1,18 +1,13 @@
 import { useEffect, useState } from 'react';
-import { ClipboardList, Image as ImageIcon, Pencil, Plus, Sun, Moon, Cookie } from 'lucide-react';
+import { ClipboardList, Plus, Sun, Moon, Cookie } from 'lucide-react';
 import { Header } from '../components/Header';
-import { BottomSheet } from '../components/BottomSheet';
-import { ShoppingMemoPanel } from '../components/ShoppingMemoPanel';
 import { MealFormSheet } from '../components/MealFormSheet';
 import { CookingFormSheet } from '../components/CookingFormSheet';
 import { PurchaseFormSheet } from '../components/PurchaseFormSheet';
-import { PurchaseEditSheet } from '../components/PurchaseEditSheet';
 import { MealDetailSheet } from '../components/MealDetailSheet';
 import { CookingDetailSheet } from '../components/CookingDetailSheet';
-import { ReceiptViewer } from '../components/ReceiptViewer';
 import { RecordTypeChooserSheet, type RecordChoice } from '../components/RecordTypeChooserSheet';
 import { listMeals } from '../repositories/mealRepo';
-import { listPurchases } from '../repositories/purchaseRepo';
 import { listCookedDishes } from '../repositories/cookedDishRepo';
 import { getSettings } from '../repositories/settingsRepo';
 import { useDataVersion } from '../hooks/useDataVersion';
@@ -21,37 +16,32 @@ import { toUserMessage } from '../utils/errors';
 import { formatDateLabel } from '../utils/date';
 import { formatQuantity } from '../utils/quantity';
 import { mealContentLabel, mealSubLabel } from '../utils/mealDisplay';
-import type { CookedDish, Meal, Purchase } from '../types';
+import type { CookedDish, Meal } from '../types';
 
 const MEAL_ICON = { 朝食: Sun, 昼食: Sun, 夕食: Moon, 間食: Cookie } as const;
 
-type RecordsTab = 'shopping' | 'meals' | 'cooking' | 'purchases';
+type RecordsTab = 'meals' | 'cooking';
 
 export function Records() {
   const { showToast } = useToast();
   const version = useDataVersion();
-  const [tab, setTab] = useState<RecordsTab>('shopping');
+  const [tab, setTab] = useState<RecordsTab>('meals');
   const [meals, setMeals] = useState<Meal[]>([]);
-  const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [cookedDishes, setCookedDishes] = useState<CookedDish[]>([]);
   const [mealTrackingEnabled, setMealTrackingEnabled] = useState(true);
   const [showChooser, setShowChooser] = useState(false);
   const [showMealForm, setShowMealForm] = useState(false);
   const [showCookingForm, setShowCookingForm] = useState(false);
   const [showPurchaseForm, setShowPurchaseForm] = useState(false);
-  const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null);
-  const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
   const [selectedMeal, setSelectedMeal] = useState<Meal | null>(null);
   const [editingMeal, setEditingMeal] = useState<Meal | null>(null);
   const [selectedDish, setSelectedDish] = useState<CookedDish | null>(null);
   const [editingDish, setEditingDish] = useState<CookedDish | null>(null);
-  const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([listMeals(), listPurchases(), listCookedDishes(), getSettings()])
-      .then(([m, p, c, s]) => {
+    Promise.all([listMeals(), listCookedDishes(), getSettings()])
+      .then(([m, c, s]) => {
         setMeals(m);
-        setPurchases(p);
         setCookedDishes(c);
         const enabled = s.mealTrackingEnabled ?? true;
         setMealTrackingEnabled(enabled);
@@ -80,9 +70,6 @@ export function Records() {
       />
       <div className="page-content">
         <div className="tabs">
-          <button className={`tab${tab === 'shopping' ? ' active' : ''}`} onClick={() => setTab('shopping')}>
-            買い物
-          </button>
           {mealTrackingEnabled && (
             <button className={`tab${tab === 'meals' ? ' active' : ''}`} onClick={() => setTab('meals')}>
               食事
@@ -91,12 +78,7 @@ export function Records() {
           <button className={`tab${tab === 'cooking' ? ' active' : ''}`} onClick={() => setTab('cooking')}>
             調理
           </button>
-          <button className={`tab${tab === 'purchases' ? ' active' : ''}`} onClick={() => setTab('purchases')}>
-            購入
-          </button>
         </div>
-
-        {tab === 'shopping' && <ShoppingMemoPanel />}
 
         {tab === 'meals' && mealTrackingEnabled && (
           <div className="card">
@@ -175,33 +157,6 @@ export function Records() {
             )}
           </div>
         )}
-
-        {tab === 'purchases' && (
-          <div className="card">
-            {purchases.length === 0 ? (
-              <div className="empty-state">まだ購入履歴がありません</div>
-            ) : (
-              purchases.map((p) => (
-                <button
-                  key={p.id}
-                  className="list-row"
-                  style={{ width: '100%', border: 'none', background: 'none', textAlign: 'left', font: 'inherit' }}
-                  onClick={() => setSelectedPurchase(p)}
-                >
-                  <div className="row-emoji">🛒</div>
-                  <div className="row-main">
-                    <div className="row-title">¥{p.totalAmount.toLocaleString()}</div>
-                    <div className="row-sub">
-                      {formatDateLabel(p.date)}
-                      {p.storeName && ` ・ ${p.storeName}`}
-                      {p.receiptId && ' ・ レシート有'}
-                    </div>
-                  </div>
-                </button>
-              ))
-            )}
-          </div>
-        )}
       </div>
 
       {showChooser && (
@@ -241,86 +196,6 @@ export function Records() {
       )}
       {editingDish && (
         <CookingFormSheet key={editingDish.id} editingDish={editingDish} onClose={() => setEditingDish(null)} />
-      )}
-
-      {selectedPurchase && (
-        <BottomSheet
-          title="購入詳細"
-          onClose={() => setSelectedPurchase(null)}
-        >
-          <button
-            className="btn btn-outline mb-16"
-            onClick={() => {
-              setEditingPurchase(selectedPurchase);
-              setSelectedPurchase(null);
-            }}
-          >
-            <Pencil size={16} /> 編集
-          </button>
-          <div className="field">
-            <label>日付</label>
-            <div>{formatDateLabel(selectedPurchase.date)} {selectedPurchase.time}</div>
-          </div>
-          <div className="field">
-            <label>合計金額</label>
-            <div style={{ fontSize: 22, fontWeight: 800 }}>¥{selectedPurchase.totalAmount.toLocaleString()}</div>
-          </div>
-          {selectedPurchase.foodAmount !== undefined && selectedPurchase.foodAmount !== selectedPurchase.totalAmount && (
-            <div className="field">
-              <label>食費として計上した金額</label>
-              <div>¥{selectedPurchase.foodAmount.toLocaleString()}</div>
-            </div>
-          )}
-          {selectedPurchase.storeName && (
-            <div className="field">
-              <label>店名</label>
-              <div>{selectedPurchase.storeName}</div>
-            </div>
-          )}
-          {selectedPurchase.items && selectedPurchase.items.length > 0 && (
-            <div className="field">
-              <label>購入商品</label>
-              <div className="card" style={{ padding: '4px 12px' }}>
-                {selectedPurchase.items.map((item, idx) => (
-                  <div className="list-row" key={idx} style={{ alignItems: 'flex-start' }}>
-                    <div className="row-emoji">{item.category === '日用品' ? '🧻' : '🛒'}</div>
-                    <div className="row-main">
-                      <div className="row-title">{item.name}</div>
-                      <div className="row-sub">
-                        {[
-                          item.quantity !== undefined && item.unit ? `${item.quantity}${item.unit}` : null,
-                          item.price !== undefined ? `¥${item.price.toLocaleString()}` : '価格未入力',
-                        ]
-                          .filter(Boolean)
-                          .join(' ・ ')}
-                      </div>
-                      {item.expiryDate && (
-                        <div className="row-sub">期限 {formatDateLabel(item.expiryDate).replace(/（.*）/, '')}</div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          {selectedPurchase.receiptId && (
-            <button className="btn btn-outline" onClick={() => setViewingReceipt(selectedPurchase.receiptId!)}>
-              <ImageIcon size={16} /> レシートを見る
-            </button>
-          )}
-        </BottomSheet>
-      )}
-
-      {editingPurchase && (
-        <PurchaseEditSheet
-          purchase={editingPurchase}
-          onClose={() => setEditingPurchase(null)}
-          onSaved={() => {}}
-        />
-      )}
-
-      {viewingReceipt && (
-        <ReceiptViewer receiptId={viewingReceipt} onClose={() => setViewingReceipt(null)} />
       )}
     </>
   );

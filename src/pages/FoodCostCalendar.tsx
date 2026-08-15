@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Header } from '../components/Header';
+import { PurchaseDetailSheet } from '../components/PurchaseDetailSheet';
+import { PurchaseEditSheet } from '../components/PurchaseEditSheet';
+import { ReceiptViewer } from '../components/ReceiptViewer';
 import { listPurchasesByDateRange } from '../repositories/purchaseRepo';
 import { listMealsByDateRange } from '../repositories/mealRepo';
 import { foodPortionOf } from '../services/foodCost';
@@ -23,6 +26,9 @@ export function FoodCostCalendar() {
   const [selectedDate, setSelectedDate] = useState(todayDateStr());
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [eatOutMeals, setEatOutMeals] = useState<Meal[]>([]);
+  const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null);
+  const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
+  const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
 
   useEffect(() => {
     const start = `${ym}-01`;
@@ -115,10 +121,15 @@ export function FoodCostCalendar() {
           ) : (
             <>
               {selectedPurchases.map((p) => (
-                <div className="item-row" key={p.id}>
+                <button
+                  key={p.id}
+                  className="item-row"
+                  style={{ width: '100%', border: 'none', background: 'none', font: 'inherit', cursor: 'pointer' }}
+                  onClick={() => setSelectedPurchase(p)}
+                >
                   <span>{p.storeName || '買い物'}</span>
                   <span>¥{foodPortionOf(p).toLocaleString()}</span>
-                </div>
+                </button>
               ))}
               {selectedEatOut.map((m) => (
                 <div className="item-row" key={m.id}>
@@ -130,6 +141,22 @@ export function FoodCostCalendar() {
           )}
         </div>
       </div>
+
+      {selectedPurchase && (
+        <PurchaseDetailSheet
+          purchase={selectedPurchase}
+          onClose={() => setSelectedPurchase(null)}
+          onEdit={() => {
+            setEditingPurchase(selectedPurchase);
+            setSelectedPurchase(null);
+          }}
+          onViewReceipt={(receiptId) => setViewingReceipt(receiptId)}
+        />
+      )}
+      {editingPurchase && (
+        <PurchaseEditSheet purchase={editingPurchase} onClose={() => setEditingPurchase(null)} onSaved={() => {}} />
+      )}
+      {viewingReceipt && <ReceiptViewer receiptId={viewingReceipt} onClose={() => setViewingReceipt(null)} />}
     </>
   );
 }

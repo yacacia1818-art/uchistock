@@ -13,7 +13,6 @@ import {
   Star,
   StickyNote,
   Calendar,
-  History,
   Bot,
   HelpCircle,
 } from 'lucide-react';
@@ -149,16 +148,6 @@ export function More() {
         </div>
 
         <div className="card mb-16">
-          <button
-            className="link-row"
-            style={{ width: '100%', border: 'none', background: 'none', font: 'inherit' }}
-            onClick={() => navigate('/records')}
-          >
-            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <History size={16} /> 履歴（購入・食事・調理）
-            </span>
-            <ChevronRight size={16} className="text-muted" />
-          </button>
           <button
             className="link-row"
             style={{ width: '100%', border: 'none', background: 'none', font: 'inherit', borderBottom: 'none' }}

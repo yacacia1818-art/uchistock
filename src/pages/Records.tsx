@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ClipboardList, Image as ImageIcon, Pencil, Plus, Sun, Moon, Cookie } from 'lucide-react';
 import { Header } from '../components/Header';
 import { BottomSheet } from '../components/BottomSheet';
+import { ShoppingMemoPanel } from '../components/ShoppingMemoPanel';
 import { MealFormSheet } from '../components/MealFormSheet';
 import { CookingFormSheet } from '../components/CookingFormSheet';
 import { PurchaseFormSheet } from '../components/PurchaseFormSheet';
@@ -24,12 +25,12 @@ import type { CookedDish, Meal, Purchase } from '../types';
 
 const MEAL_ICON = { 朝食: Sun, 昼食: Sun, 夕食: Moon, 間食: Cookie } as const;
 
-type RecordsTab = 'meals' | 'cooking' | 'purchases';
+type RecordsTab = 'shopping' | 'meals' | 'cooking' | 'purchases';
 
 export function Records() {
   const { showToast } = useToast();
   const version = useDataVersion();
-  const [tab, setTab] = useState<RecordsTab>('meals');
+  const [tab, setTab] = useState<RecordsTab>('shopping');
   const [meals, setMeals] = useState<Meal[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [cookedDishes, setCookedDishes] = useState<CookedDish[]>([]);
@@ -79,6 +80,9 @@ export function Records() {
       />
       <div className="page-content">
         <div className="tabs">
+          <button className={`tab${tab === 'shopping' ? ' active' : ''}`} onClick={() => setTab('shopping')}>
+            買い物
+          </button>
           {mealTrackingEnabled && (
             <button className={`tab${tab === 'meals' ? ' active' : ''}`} onClick={() => setTab('meals')}>
               食事
@@ -91,6 +95,8 @@ export function Records() {
             購入
           </button>
         </div>
+
+        {tab === 'shopping' && <ShoppingMemoPanel />}
 
         {tab === 'meals' && mealTrackingEnabled && (
           <div className="card">

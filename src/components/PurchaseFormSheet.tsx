@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react';
-import { Camera, ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
+import { Camera, Plus, Trash2 } from 'lucide-react';
 import { BottomSheet } from './BottomSheet';
 import { recordPurchase } from '../services/purchaseService';
 import { useToast } from './ToastProvider';
@@ -74,15 +74,21 @@ function blankRow(): PurchaseRow {
 
 export function PurchaseFormSheet({ onClose, carriedItems }: PurchaseFormSheetProps) {
   const { showToast } = useToast();
-  const [totalAmount, setTotalAmount] = useState('');
   const [storeName, setStoreName] = useState('');
-  const [rows, setRows] = useState<PurchaseRow[]>((carriedItems ?? []).map(buildRowFromMemoItem));
+  const [rows, setRows] = useState<PurchaseRow[]>(
+    carriedItems && carriedItems.length > 0 ? carriedItems.map(buildRowFromMemoItem) : [blankRow()]
+  );
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [showAmountSplit, setShowAmountSplit] = useState(false);
-  const [foodAmount, setFoodAmount] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 商品ごとの金額（今回その商品にかかった合計金額）を積み上げて購入全体の合計を出す。
+  // ユーザーに暗算させないため、合計は常にここから自動算出し、手入力欄は持たない
+  const computedTotal = useMemo(
+    () => rows.reduce((sum, r) => (r.name.trim() && r.price.trim() !== '' ? sum + (Number(r.price) || 0) : sum), 0),
+    [rows]
+  );
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -100,23 +106,23 @@ export function PurchaseFormSheet({ onClose, carriedItems }: PurchaseFormSheetPr
   }
 
   async function handleSave() {
-    const amountNum = Number(totalAmount);
-    if (totalAmount.trim() === '' || Number.isNaN(amountNum) || amountNum < 0) {
-      showToast('正しい金額を入力してください');
+    const validRows = rows.filter((r) => r.name.trim());
+    if (validRows.length === 0) {
+      showToast('商品を1つ以上入力してください');
       return;
     }
-    let foodAmountNum: number | undefined;
-    if (showAmountSplit && foodAmount.trim() !== '') {
-      foodAmountNum = Number(foodAmount);
-      if (Number.isNaN(foodAmountNum) || foodAmountNum < 0) {
-        showToast('食品・食費分には0以上の数値を入力してください');
-        return;
-      }
+    const missingPrice = validRows.find((r) => r.price.trim() === '' || Number.isNaN(Number(r.price)) || Number(r.price) < 0);
+    if (missingPrice) {
+      showToast(`「${missingPrice.name}」の金額を入力してください`);
+      return;
     }
+    const amountNum = computedTotal;
+    const foodAmountNum = validRows
+      .filter((r) => r.category === '食品')
+      .reduce((sum, r) => sum + Number(r.price), 0);
+
     setSaving(true);
     try {
-      const validRows = rows.filter((r) => r.name.trim());
-
       const items = validRows.map((r) => {
         const qty = r.quantity.trim() !== '' ? Number(r.quantity) : undefined;
         return {
@@ -170,40 +176,14 @@ export function PurchaseFormSheet({ onClose, carriedItems }: PurchaseFormSheetPr
   return (
     <BottomSheet title="購入を記録" onClose={onClose}>
       <div className="field">
-        <label>合計金額（必須）</label>
-        <input
-          className="input"
-          type="number"
-          inputMode="numeric"
-          placeholder="例：2860"
-          value={totalAmount}
-          onChange={(e) => setTotalAmount(e.target.value)}
-          autoFocus
-        />
-      </div>
-
-      <button
-        type="button"
-        className="btn-ghost"
-        style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, marginBottom: 14, padding: 0 }}
-        onClick={() => setShowAmountSplit((v) => !v)}
-      >
-        {showAmountSplit ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-        食品・日用品の内訳を指定する（任意）
-      </button>
-      {showAmountSplit && (
-        <div className="field">
-          <label>食品・食費分（任意・空欄なら合計金額をすべて食費に含めます）</label>
-          <input
-            className="input"
-            type="number"
-            inputMode="numeric"
-            placeholder="例：1600"
-            value={foodAmount}
-            onChange={(e) => setFoodAmount(e.target.value)}
-          />
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+          <label style={{ marginBottom: 0 }}>合計金額</label>
+          <div className="display" style={{ fontSize: 26, fontWeight: 800 }}>
+            ¥{computedTotal.toLocaleString()}
+          </div>
         </div>
-      )}
+        <p className="text-muted" style={{ fontSize: 12 }}>商品ごとの金額を入力すると自動で計算されます</p>
+      </div>
 
       <div className="field">
         <label>店名（任意）</label>
@@ -211,10 +191,10 @@ export function PurchaseFormSheet({ onClose, carriedItems }: PurchaseFormSheetPr
       </div>
 
       <div className="field">
-        <label>購入したもの（任意）</label>
+        <label>購入したもの（必須）</label>
         {rows.length > 0 && (
           <div className="card mb-8" style={{ padding: '4px 12px' }}>
-            {rows.map((row) => (
+            {rows.map((row, idx) => (
               <div key={row.id} style={{ padding: '10px 0', borderBottom: '1px solid var(--color-border)' }}>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
                   <input
@@ -223,6 +203,7 @@ export function PurchaseFormSheet({ onClose, carriedItems }: PurchaseFormSheetPr
                     placeholder="商品名"
                     value={row.name}
                     onChange={(e) => updateRow(row.id, { name: e.target.value })}
+                    autoFocus={idx === 0}
                   />
                   <button className="icon-btn" onClick={() => removeRow(row.id)} aria-label="削除">
                     <Trash2 size={16} />
@@ -265,7 +246,7 @@ export function PurchaseFormSheet({ onClose, carriedItems }: PurchaseFormSheetPr
                     className="input"
                     type="number"
                     inputMode="numeric"
-                    placeholder="価格（任意）"
+                    placeholder="金額（必須）"
                     style={{ flex: 1, minWidth: 100, padding: '8px 10px' }}
                     value={row.price}
                     onChange={(e) => updateRow(row.id, { price: e.target.value })}
@@ -367,7 +348,7 @@ export function PurchaseFormSheet({ onClose, carriedItems }: PurchaseFormSheetPr
           <Plus size={16} /> 商品を追加
         </button>
         <p className="text-muted mt-8" style={{ fontSize: 12 }}>
-          ※ 商品を追加しなくても合計金額だけで保存できます。食品・日用品どちらも在庫へ反映できます。
+          ※ 各商品の金額を入力すると、合計金額が自動で計算されます。食品・日用品どちらも在庫へ反映できます。
         </p>
       </div>
 

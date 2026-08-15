@@ -6,6 +6,7 @@ import { Ingredients } from './pages/Ingredients';
 import { Shopping } from './pages/Shopping';
 import { Records } from './pages/Records';
 import { CalendarPage } from './pages/CalendarPage';
+import { FoodCostCalendar } from './pages/FoodCostCalendar';
 import { More } from './pages/More';
 import { Settings } from './pages/Settings';
 import { Recipes } from './pages/Recipes';
@@ -24,6 +25,7 @@ export default function App() {
             <Route path="/shopping" element={<Shopping />} />
             <Route path="/records" element={<Records />} />
             <Route path="/calendar" element={<CalendarPage />} />
+            <Route path="/food-calendar" element={<FoodCostCalendar />} />
             <Route path="/more" element={<More />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/recipes" element={<Recipes />} />

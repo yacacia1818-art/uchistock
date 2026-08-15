@@ -673,6 +673,41 @@ button {
   background: var(--color-danger);
 }
 
+.cost-cell {
+  min-height: 46px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+  gap: 2px;
+  padding: 2px 0;
+}
+.cost-cell .cost-day {
+  font-size: 11px;
+}
+.cost-cell .cost-amount {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--color-primary-dark);
+}
+.cost-cell.today {
+  background: var(--color-primary);
+  color: #fff;
+}
+.cost-cell.today .cost-amount {
+  color: #fff;
+}
+.cost-cell.selected:not(.today) {
+  background: var(--color-primary-soft);
+  font-weight: 700;
+}
+
 .recipe-thumb {
   width: 56px;
   height: 56px;

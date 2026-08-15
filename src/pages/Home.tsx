@@ -136,24 +136,43 @@ export function Home() {
       />
       <div className="page-content">
         <div className="card mb-16">
-          <div className="card-title" style={{ marginBottom: 12 }}>今日気をつけたいもの</div>
+          <div className="card-title" style={{ marginBottom: 12 }}>期限のお知らせ</div>
           {urgent.length === 0 ? (
             <p className="text-muted" style={{ fontSize: 13 }}>今日は特に気にするものはありません</p>
           ) : (
-            urgent.map(({ ingredient, days }) => {
-              const urgency = expiryUrgency(days);
+            (['expired', 'today', 'soon'] as const).map((group) => {
+              const items = urgent.filter(({ days }) => expiryUrgency(days) === group);
+              if (items.length === 0) return null;
+              const groupLabel = group === 'expired' ? '期限切れ' : group === 'today' ? '今日まで' : 'もうすぐ期限';
               return (
-                <div className="item-row" key={ingredient.id}>
-                  <div className="item-left">
-                    <div className="item-emoji">{categoryEmojiFor(ingredient)}</div>
-                    <div className="item-name">
-                      <span className="item-name-text">{ingredient.name}</span>
-                    </div>
+                <div key={group} style={{ marginBottom: 10 }}>
+                  <div
+                    style={{
+                      fontSize: 11.5,
+                      fontWeight: 700,
+                      color: group === 'soon' ? 'var(--color-primary-dark)' : 'var(--color-danger)',
+                      margin: '2px 0 4px',
+                    }}
+                  >
+                    {groupLabel}
                   </div>
-                  <span className={`item-badge${urgency === 'soon' ? ' soon' : ''}`}>
-                    {expiryUrgencyIcon(urgency)}
-                    {formatExpiryRelative(days)}
-                  </span>
+                  {items.map(({ ingredient, days }) => {
+                    const urgency = expiryUrgency(days);
+                    return (
+                      <div className="item-row" key={ingredient.id}>
+                        <div className="item-left">
+                          <div className="item-emoji">{categoryEmojiFor(ingredient)}</div>
+                          <div className="item-name">
+                            <span className="item-name-text">{ingredient.name}</span>
+                          </div>
+                        </div>
+                        <span className={`item-badge${urgency === 'soon' ? ' soon' : ''}`}>
+                          {expiryUrgencyIcon(urgency)}
+                          {formatExpiryRelative(days)}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               );
             })
@@ -162,7 +181,7 @@ export function Home() {
 
         <button className="card mb-16" style={{ width: '100%', textAlign: 'left', border: 'none', font: 'inherit', cursor: 'pointer' }} onClick={() => navigate('/shopping')}>
           <div className="card-head" style={{ marginBottom: memo.length > 0 ? 6 : 0 }}>
-            <div className="card-title">🛒 買い物メモ　{memo.length}件</div>
+            <div className="card-title">🛒 買い物　{memo.length}件</div>
             <span className="card-link">›</span>
           </div>
           {memo.length > 0 && (
@@ -172,9 +191,14 @@ export function Home() {
           )}
         </button>
 
-        <div className="card mb-16">
+        <button
+          className="card mb-16"
+          style={{ width: '100%', textAlign: 'left', border: 'none', font: 'inherit', cursor: 'pointer' }}
+          onClick={() => navigate('/food-calendar')}
+        >
           <div className="card-head">
             <div className="card-title">{periodLabel}</div>
+            <span className="card-link">›</span>
           </div>
           <div className="budget-num display" style={{ fontSize: 24 }}>
             ¥{used.toLocaleString()}
@@ -185,7 +209,7 @@ export function Home() {
               予算を¥{Math.abs(remaining).toLocaleString()}超過しています
             </div>
           )}
-        </div>
+        </button>
       </div>
 
       {fabOpen && <button className="fab-backdrop" aria-label="閉じる" onClick={() => setFabOpen(false)} />}

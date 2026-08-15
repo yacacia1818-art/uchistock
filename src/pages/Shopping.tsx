@@ -24,6 +24,7 @@ export function Shopping() {
   const [memo, setMemo] = useState<ShoppingMemoItem[]>([]);
   const [showAddMemoOpen, setShowAddMemoOpen] = useState(false);
   const [showPurchaseCarry, setShowPurchaseCarry] = useState(false);
+  const [showPurchaseDirect, setShowPurchaseDirect] = useState(false);
 
   useEffect(() => {
     Promise.all([listIngredients(), listShoppingMemo()])
@@ -158,17 +159,27 @@ export function Shopping() {
           )}
         </div>
 
-        {checkedMemo.length > 0 && (
-          <button className="btn btn-secondary" onClick={() => setShowPurchaseCarry(true)}>
-            <ShoppingCart size={16} /> 購入を記録する（{checkedMemo.length}件）
+        <div className="section-title" style={{ marginTop: 4 }}>買ったものを記録</div>
+        <div className="card mb-16">
+          <p className="text-muted mb-16" style={{ fontSize: 12.5 }}>
+            買い物メモにない購入も、ここから直接記録できます。
+          </p>
+          <button className="btn btn-primary" onClick={() => setShowPurchaseDirect(true)}>
+            <ShoppingCart size={16} /> 買ったものを記録する
           </button>
-        )}
+          {checkedMemo.length > 0 && (
+            <button className="btn btn-secondary mt-8" onClick={() => setShowPurchaseCarry(true)}>
+              チェック済みの{checkedMemo.length}件から記録する
+            </button>
+          )}
+        </div>
       </div>
 
       {showAddMemoOpen && <AddMemoSheet onClose={() => setShowAddMemoOpen(false)} />}
       {showPurchaseCarry && (
         <PurchaseFormSheet carriedItems={checkedMemo} onClose={() => setShowPurchaseCarry(false)} />
       )}
+      {showPurchaseDirect && <PurchaseFormSheet onClose={() => setShowPurchaseDirect(false)} />}
     </>
   );
 }

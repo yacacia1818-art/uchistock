@@ -5,7 +5,7 @@ import { addIngredient, listIngredients } from '../repositories/ingredientRepo';
 import { useToast } from './ToastProvider';
 import { notifyDataChanged } from '../utils/bus';
 import { toUserMessage } from '../utils/errors';
-import { gaugeLevelToQuantity } from '../utils/quantity';
+import { formatQuantity, gaugeLevelToQuantity, snapQuantity } from '../utils/quantity';
 import { STORAGE_LOCATION_EMOJI } from '../utils/categoryEmoji';
 import { STORAGE_LOCATIONS, UNIT_OPTIONS } from '../types';
 import type { Ingredient, QuantityMode, StorageLocation } from '../types';
@@ -177,12 +177,9 @@ export function AddIngredientSheet({ onClose }: AddIngredientSheetProps) {
         <div className="field">
           <label>数量</label>
           <div className="stepper" style={{ justifyContent: 'space-between' }}>
-            <button onClick={() => setQuantity((q) => Math.max(0, q - 1))}>−</button>
-            <span>
-              {quantity}
-              {resolvedUnit}
-            </span>
-            <button onClick={() => setQuantity((q) => q + 1)}>＋</button>
+            <button onClick={() => setQuantity((q) => snapQuantity(q - 1))}>−</button>
+            <span>{formatQuantity(quantity, resolvedUnit)}</span>
+            <button onClick={() => setQuantity((q) => snapQuantity(q + 1))}>＋</button>
           </div>
         </div>
       ) : (

@@ -4,7 +4,7 @@ import { decrementIngredientQuantity, deleteIngredient, updateIngredient } from 
 import { notifyDataChanged } from '../utils/bus';
 import { useToast } from './ToastProvider';
 import { toUserMessage } from '../utils/errors';
-import { formatStock, gaugeLevelOf, gaugeLevelToQuantity } from '../utils/quantity';
+import { formatStock, gaugeLevelOf, gaugeLevelToQuantity, snapQuantity } from '../utils/quantity';
 import { formatExpiryRelative, daysUntil, getEarliestExpiry } from '../utils/expiry';
 import { expiryUrgency, expiryUrgencyIcon, expiryUrgencyStyle } from '../utils/expiryUi';
 import { categoryEmojiFor } from '../utils/categoryEmoji';
@@ -28,7 +28,7 @@ export function IngredientRow({ ingredient, onEdit }: IngredientRowProps) {
         // 期限バッチもFIFOで一緒に減らす（古い期限が消費済みなのに残り続けるのを防ぐため）
         await decrementIngredientQuantity(ingredient.id, Math.abs(delta));
       } else {
-        const next = Math.round((ingredient.quantity + delta) * 10) / 10;
+        const next = snapQuantity(ingredient.quantity + delta);
         await updateIngredient({ ...ingredient, quantity: next });
       }
       notifyDataChanged();

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check, StickyNote, Utensils, Plus } from 'lucide-react';
 import { Header } from '../components/Header';
@@ -13,8 +13,6 @@ import { getPeriodCost } from '../services/foodCost';
 import { listExpiringIngredients, type ExpiringIngredient } from '../services/expirySummary';
 import { syncExpiryNotifications } from '../services/notificationService';
 import { getCurrentPeriod } from '../utils/period';
-import { expiryUrgency, expiryUrgencyIcon } from '../utils/expiryUi';
-import { formatExpiryRelative } from '../utils/expiry';
 import { formatDateLabel, todayDateStr } from '../utils/date';
 import { categoryEmojiFor } from '../utils/categoryEmoji';
 import { useDataVersion } from '../hooks/useDataVersion';
@@ -22,11 +20,32 @@ import { useToast } from '../components/ToastProvider';
 import { toUserMessage } from '../utils/errors';
 import type { AppNotification, MealType, ShoppingMemoItem } from '../types';
 
+interface ExpiryGroup {
+  key: string;
+  label: string;
+  tone: 'urgent' | 'warn';
+  items: ExpiringIngredient[];
+}
+
+// 期限切れ・今日までは状態そのものが緊急度を表すので専用の見出しにし、
+// それ以外は「あと◯日」という数字そのものが意味を伝えるので日数ごとに分ける
+function buildExpiryGroups(urgent: ExpiringIngredient[]): ExpiryGroup[] {
+  const groups: ExpiryGroup[] = [];
+  const expired = urgent.filter((u) => u.days < 0);
+  const today = urgent.filter((u) => u.days === 0);
+  if (expired.length > 0) groups.push({ key: 'expired', label: '期限切れ', tone: 'urgent', items: expired });
+  if (today.length > 0) groups.push({ key: 'today', label: '今日まで', tone: 'urgent', items: today });
+  for (let d = 1; d <= 3; d++) {
+    const items = urgent.filter((u) => u.days === d);
+    if (items.length > 0) groups.push({ key: `d${d}`, label: `あと${d}日`, tone: 'warn', items });
+  }
+  return groups;
+}
+
 export function Home() {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const version = useDataVersion();
-  const [budget, setBudget] = useState(15000);
   const [used, setUsed] = useState(0);
   const [startDay, setStartDay] = useState(1);
   const [mealTrackingEnabled, setMealTrackingEnabled] = useState(true);
@@ -53,11 +72,10 @@ export function Home() {
           listNotifications(),
         ]);
         if (cancelled) return;
-        setBudget(settings.monthlyBudget);
         setStartDay(settings.budgetStartDay ?? 1);
         setMealTrackingEnabled(settings.mealTrackingEnabled ?? true);
         setUsed(cost.used);
-        // 「今日気をつけたいもの」＝期限切れ・今日・3日以内のものだけ。それ以外はホームに出さない
+        // ホームで気にすべきもの＝期限切れ・今日・3日以内のものだけ。それ以外は出さない
         setUrgent(expiring.filter((e) => e.days <= 3));
         setMemo(memoItems.filter((m) => !m.checked));
         setNotifications(notifs);
@@ -72,9 +90,8 @@ export function Home() {
   }, [version, showToast]);
 
   const periodLabel = startDay === 1 ? '今月の食費' : '今期の食費';
-  const remaining = budget - used;
-
   const unreadCount = notifications.filter((n) => !n.isRead).length;
+  const expiryGroups = useMemo(() => buildExpiryGroups(urgent), [urgent]);
 
   async function handleMarkNotificationRead(id: string) {
     try {
@@ -101,91 +118,57 @@ export function Home() {
         title="ウチストック"
         subtitle={formatDateLabel(todayDateStr())}
       />
-      <div className="page-content">
-        <div className="card mb-16">
-          <div className="card-head" style={{ marginBottom: 12 }}>
-            <div className="card-title">期限のお知らせ</div>
+      <div className="page-content" style={{ paddingBottom: 'calc(var(--nav-height) + 86px + var(--safe-bottom))' }}>
+        <div className="card expiry-hero mb-16">
+          <div className="card-head expiry-hero-title">
+            <div className="card-title display">期限のお知らせ</div>
             {unreadCount > 0 && (
-              <button
-                className="btn btn-outline btn-sm"
-                onClick={() => setShowNotices(true)}
-              >
+              <button className="btn btn-outline btn-sm" onClick={() => setShowNotices(true)}>
                 <Check size={13} /> {unreadCount}件を確認
               </button>
             )}
           </div>
-          {urgent.length === 0 ? (
-            <p className="text-muted" style={{ fontSize: 13 }}>今日は特に気にするものはありません</p>
+
+          {expiryGroups.length === 0 ? (
+            <div className="expiry-empty">
+              <div className="check-badge">
+                <Check size={20} strokeWidth={3} />
+              </div>
+              <div className="main-msg">今日は気になる期限はありません</div>
+              <div className="sub-msg">ひとまず安心です</div>
+            </div>
           ) : (
-            (['expired', 'today', 'soon'] as const).map((group) => {
-              const items = urgent.filter(({ days }) => expiryUrgency(days) === group);
-              if (items.length === 0) return null;
-              const groupLabel = group === 'expired' ? '期限切れ' : group === 'today' ? '今日まで' : 'もうすぐ期限';
-              return (
-                <div key={group} style={{ marginBottom: 10 }}>
-                  <div
-                    style={{
-                      fontSize: 11.5,
-                      fontWeight: 700,
-                      color: group === 'soon' ? 'var(--color-primary-dark)' : 'var(--color-danger)',
-                      margin: '2px 0 4px',
-                    }}
-                  >
-                    {groupLabel}
-                  </div>
-                  {items.map(({ ingredient, days }) => {
-                    const urgency = expiryUrgency(days);
-                    return (
-                      <div className="item-row" key={ingredient.id}>
-                        <div className="item-left">
-                          <div className="item-emoji">{categoryEmojiFor(ingredient)}</div>
-                          <div className="item-name">
-                            <span className="item-name-text">{ingredient.name}</span>
-                          </div>
-                        </div>
-                        <span className={`item-badge${urgency === 'soon' ? ' soon' : ''}`}>
-                          {expiryUrgencyIcon(urgency)}
-                          {formatExpiryRelative(days)}
-                        </span>
-                      </div>
-                    );
-                  })}
+            expiryGroups.map((group) => (
+              <div className="expiry-group" key={group.key}>
+                <div className={`expiry-group-label ${group.tone}`}>
+                  <span className="dot" />
+                  {group.label}
                 </div>
-              );
-            })
+                {group.items.map(({ ingredient }) => (
+                  <div className="expiry-item" key={ingredient.id}>
+                    <div className="item-emoji">{categoryEmojiFor(ingredient)}</div>
+                    <span className="expiry-item-name">{ingredient.name}</span>
+                  </div>
+                ))}
+              </div>
+            ))
           )}
         </div>
 
-        <button className="card mb-16" style={{ width: '100%', textAlign: 'left', border: 'none', font: 'inherit', cursor: 'pointer' }} onClick={() => navigate('/shopping')}>
-          <div className="card-head" style={{ marginBottom: memo.length > 0 ? 6 : 0 }}>
-            <div className="card-title">🛒 買い物メモ　{memo.length}件</div>
+        <button className="quick-row mb-8" onClick={() => navigate('/shopping')}>
+          <span className="quick-row-label">🛒 買い物メモ</span>
+          <span className="quick-row-right">
+            <span className="quick-row-value">{memo.length}件</span>
             <span className="card-link">›</span>
-          </div>
-          {memo.length > 0 && (
-            <div className="text-muted" style={{ fontSize: 12.5 }}>
-              {memo.slice(0, 5).map((m) => m.name).join('・')}
-            </div>
-          )}
+          </span>
         </button>
 
-        <button
-          className="card mb-16"
-          style={{ width: '100%', textAlign: 'left', border: 'none', font: 'inherit', cursor: 'pointer' }}
-          onClick={() => navigate('/food-calendar')}
-        >
-          <div className="card-head">
-            <div className="card-title">{periodLabel}</div>
+        <button className="quick-row" onClick={() => navigate('/food-calendar')}>
+          <span className="quick-row-label">{periodLabel}</span>
+          <span className="quick-row-right">
+            <span className="quick-row-value">¥{used.toLocaleString()}</span>
             <span className="card-link">›</span>
-          </div>
-          <div className="budget-num display" style={{ fontSize: 24 }}>
-            ¥{used.toLocaleString()}
-            <span> / ¥{budget.toLocaleString()}</span>
-          </div>
-          {remaining < 0 && (
-            <div style={{ fontSize: 12, color: 'var(--color-danger)', fontWeight: 700, marginTop: 4 }}>
-              予算を¥{Math.abs(remaining).toLocaleString()}超過しています
-            </div>
-          )}
+          </span>
         </button>
       </div>
 
@@ -225,7 +208,7 @@ export function Home() {
           </>
         )}
         <button
-          className={`fab-main${fabOpen ? ' open' : ''}`}
+          className={`fab-main small${fabOpen ? ' open' : ''}`}
           onClick={() => setFabOpen((v) => !v)}
           aria-label={fabOpen ? 'メニューを閉じる' : 'メニューを開く'}
         >

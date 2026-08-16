@@ -959,6 +959,118 @@ button {
   font-weight: 700;
 }
 
+/* ホーム: 期限のお知らせ（主役セクション） */
+.expiry-hero {
+  padding: 22px 20px;
+}
+.expiry-hero-title {
+  font-size: 19px;
+  margin-bottom: var(--s4);
+}
+.expiry-group + .expiry-group {
+  margin-top: var(--s5);
+}
+.expiry-group-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: var(--s2);
+}
+.expiry-group-label .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+.expiry-group-label.urgent {
+  color: var(--color-danger);
+}
+.expiry-group-label.warn {
+  color: var(--color-primary-dark);
+}
+.expiry-item {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s2) 0;
+}
+.expiry-item .item-emoji {
+  width: 36px;
+  height: 36px;
+  font-size: 18px;
+}
+.expiry-item-name {
+  font-weight: 700;
+  font-size: 14.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.expiry-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: var(--s4) var(--s3) var(--s2);
+  gap: var(--s2);
+}
+.expiry-empty .check-badge {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--color-secondary-soft);
+  color: var(--color-secondary-dark);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.expiry-empty .main-msg {
+  font-weight: 700;
+  font-size: 15px;
+}
+.expiry-empty .sub-msg {
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+}
+
+/* ホーム: 補助ショートカット（買い物メモ・今月の食費） */
+.quick-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 14px 16px;
+  border: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+.quick-row-label {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+.quick-row-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.quick-row-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
 .fab-zone {
   position: fixed;
   left: 0;
@@ -1029,6 +1141,12 @@ button {
 }
 .fab-main.open {
   transform: rotate(45deg);
+}
+.fab-main.small {
+  width: 46px;
+  height: 46px;
+  font-size: 21px;
+  box-shadow: 0 6px 14px rgba(245, 130, 47, 0.32);
 }
 @keyframes fab-option-in {
   from {
